@@ -38,6 +38,10 @@ export class InMemoryWorkoutIngestionRepository
   }
 
   async persistIngestionRecord(input: PersistIngestionRecordInput): Promise<void> {
+    if (this.responsesByIdempotencyKey.has(input.idempotencyKey)) {
+      return;
+    }
+
     this.responsesByIdempotencyKey.set(
       input.idempotencyKey,
       structuredClone(input.response)

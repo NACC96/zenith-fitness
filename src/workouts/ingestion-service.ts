@@ -125,6 +125,10 @@ export class WorkoutIngestionService {
   private readonly deps: WorkoutIngestionServiceDependencies;
   private readonly now: () => Date;
   private readonly idGenerator: () => string;
+  private readonly inFlightByIdempotencyKey = new Map<
+    string,
+    Promise<WorkoutIngestionResponse>
+  >();
 
   constructor(deps: WorkoutIngestionServiceDependencies) {
     this.deps = deps;
@@ -151,6 +155,30 @@ export class WorkoutIngestionService {
       return existingResponse;
     }
 
+    const existingInFlight = this.inFlightByIdempotencyKey.get(idempotencyKey);
+    if (existingInFlight) {
+      return existingInFlight;
+    }
+
+    const ingestionPromise = this.persistNewIngestionRecord(
+      request,
+      idempotencyKey
+    );
+    this.inFlightByIdempotencyKey.set(idempotencyKey, ingestionPromise);
+
+    try {
+      return await ingestionPromise;
+    } finally {
+      if (this.inFlightByIdempotencyKey.get(idempotencyKey) === ingestionPromise) {
+        this.inFlightByIdempotencyKey.delete(idempotencyKey);
+      }
+    }
+  }
+
+  private async persistNewIngestionRecord(
+    request: WorkoutIngestionRequest,
+    idempotencyKey: string
+  ): Promise<WorkoutIngestionResponse> {
     const rawLogId = this.idGenerator();
     const parseVersion = 1;
     const parserResult = await this.deps.parser.parseWorkout(request);
@@ -191,7 +219,19 @@ export class WorkoutIngestionService {
       modelLog: parserResult.modelLog,
     };
 
-    await this.deps.repository.persistIngestionRecord(persistInput);
-    return response;
+    try {
+      await this.deps.repository.persistIngestionRecord(persistInput);
+      return response;
+    } catch (error) {
+      const existingResponse = await this.deps.repository.findByIdempotencyKey(
+        idempotencyKey
+      );
+
+      if (existingResponse) {
+        return existingResponse;
+      }
+
+      throw error;
+    }
   }
 }
