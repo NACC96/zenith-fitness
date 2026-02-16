@@ -281,6 +281,11 @@ const main = async (): Promise<void> => {
     chestOnlyView.sessionHistory.every((row) => row.workoutTypeLabel === "Chest"),
     "chest filter returned non-chest session."
   );
+  assert(
+    chestOnlyView.sessionHistory[0]?.previousSessionTotalLbsDelta === 190 &&
+      chestOnlyView.sessionHistory[1]?.previousSessionTotalLbsDelta == null,
+    "chest history in-range deltas should be computed within filtered window."
+  );
 
   const customOnlyView = await buildDashboardAnalyticsView({
     repository,
@@ -305,6 +310,35 @@ const main = async (): Promise<void> => {
       dateRangeView.sessionHistory.some((row) => row.sessionId === "session-legs-1") &&
       dateRangeView.sessionHistory.some((row) => row.sessionId === "session-shoulders-1"),
     "date range results mismatch."
+  );
+
+  const chestSingleDayView = await buildDashboardAnalyticsView({
+    repository,
+    filter: {
+      workoutType: "chest",
+      startDate: "2026-01-20",
+      endDate: "2026-01-20",
+    },
+  });
+  assert(
+    chestSingleDayView.sessionHistory.length === 1 &&
+      chestSingleDayView.sessionHistory[0]?.sessionId === "session-chest-2",
+    "single-day chest filter should return only session-chest-2."
+  );
+  assert(
+    chestSingleDayView.sessionComparison?.previousSessionTotalLbsDelta == null &&
+      chestSingleDayView.sessionComparison.direction === "none",
+    "single-day chest comparison delta should be null with no in-range previous session."
+  );
+  assert(
+    chestSingleDayView.sessionHistory[0]?.previousSessionTotalLbsDelta == null,
+    "single-day chest history delta should be null with no in-range previous session."
+  );
+  assert(
+    chestSingleDayView.progression.every(
+      (row) => row.volumeDeltaLbs === 0 && row.repDelta === 0
+    ),
+    "single-day chest progression deltas should be zero with no in-range previous session."
   );
 
   const emptyView = await buildDashboardAnalyticsView({

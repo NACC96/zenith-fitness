@@ -98,6 +98,62 @@ const compareSessionsByOccurredAt = (
   return leftTimestamp - rightTimestamp;
 };
 
+interface ExerciseTotals {
+  totalVolumeLbs: number;
+  totalReps: number;
+}
+
+interface FilteredSessionContext {
+  previousSessionById: Map<string, ParsedWorkoutSession | null>;
+  previousSessionTotalLbsDeltaById: Map<string, number | null>;
+}
+
+const buildFilteredSessionContext = (
+  sessions: ParsedWorkoutSession[]
+): FilteredSessionContext => {
+  const previousSessionById = new Map<string, ParsedWorkoutSession | null>();
+  const previousSessionTotalLbsDeltaById = new Map<string, number | null>();
+  const latestByWorkoutTypeId = new Map<string, ParsedWorkoutSession>();
+
+  for (const session of sessions) {
+    const previousSession =
+      latestByWorkoutTypeId.get(session.session.workoutTypeId) ?? null;
+    previousSessionById.set(session.session.id, previousSession);
+    previousSessionTotalLbsDeltaById.set(
+      session.session.id,
+      previousSession
+        ? roundToHundredths(
+            session.metrics.totalLbsLifted - previousSession.metrics.totalLbsLifted
+          )
+        : null
+    );
+    latestByWorkoutTypeId.set(session.session.workoutTypeId, session);
+  }
+
+  return {
+    previousSessionById,
+    previousSessionTotalLbsDeltaById,
+  };
+};
+
+const totalsByExerciseKey = (
+  session: ParsedWorkoutSession | null | undefined
+): Map<string, ExerciseTotals> => {
+  const totals = new Map<string, ExerciseTotals>();
+  if (!session) {
+    return totals;
+  }
+
+  for (const exercise of session.exercisePerformances) {
+    totals.set(exercise.exerciseKey, {
+      totalVolumeLbs: exercise.totalVolumeLbs,
+      totalReps: exercise.totalReps,
+    });
+  }
+
+  return totals;
+};
+
 export interface DashboardFilterInput {
   workoutType?: string | null;
   startDate?: string | null;
@@ -245,10 +301,9 @@ const buildEmptyStateMessage = (filter: DashboardFilterState): string => {
 };
 
 const buildSessionComparison = (
-  latestSession: ParsedWorkoutSession
+  inRangePreviousSessionTotalLbsDelta: number | null
 ): DashboardSessionComparison => {
-  const delta = latestSession.metrics.previousSessionTotalLbsDelta ?? null;
-  if (delta == null) {
+  if (inRangePreviousSessionTotalLbsDelta == null) {
     return {
       previousSessionTotalLbsDelta: null,
       direction: "none",
@@ -257,10 +312,14 @@ const buildSessionComparison = (
   }
 
   const direction =
-    delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    inRangePreviousSessionTotalLbsDelta > 0
+      ? "up"
+      : inRangePreviousSessionTotalLbsDelta < 0
+        ? "down"
+        : "flat";
 
   return {
-    previousSessionTotalLbsDelta: delta,
+    previousSessionTotalLbsDelta: inRangePreviousSessionTotalLbsDelta,
     direction,
     description:
       direction === "up"
@@ -373,24 +432,28 @@ export const buildDashboardAnalyticsView = async ({
         )
       : null;
 
-  const progressionByExerciseKey = new Map(
-    latestSession.metrics.perExerciseProgression.map((progression) => [
-      progression.exerciseKey,
-      progression,
-    ])
+  const filteredSessionContext = buildFilteredSessionContext(filteredSessions);
+  const latestInRangePreviousSession =
+    filteredSessionContext.previousSessionById.get(latestSession.session.id) ?? null;
+  const latestInRangePreviousSessionExerciseTotals = totalsByExerciseKey(
+    latestInRangePreviousSession
   );
 
   const progression = [...latestSession.exercisePerformances]
     .sort((left, right) => left.exerciseOrder - right.exerciseOrder)
     .map((exercise) => {
-      const progressionMetrics = progressionByExerciseKey.get(exercise.exerciseKey);
+      const previousTotals = latestInRangePreviousSessionExerciseTotals.get(
+        exercise.exerciseKey
+      );
       return {
         exerciseKey: exercise.exerciseKey,
         exerciseName: exercise.exerciseName,
         totalVolumeLbs: exercise.totalVolumeLbs,
         totalReps: exercise.totalReps,
-        volumeDeltaLbs: progressionMetrics?.volumeDeltaLbs ?? 0,
-        repDelta: progressionMetrics?.repDelta ?? 0,
+        volumeDeltaLbs: previousTotals
+          ? roundToHundredths(exercise.totalVolumeLbs - previousTotals.totalVolumeLbs)
+          : 0,
+        repDelta: previousTotals ? exercise.totalReps - previousTotals.totalReps : 0,
       };
     });
 
@@ -405,7 +468,9 @@ export const buildDashboardAnalyticsView = async ({
       totalLbsLifted: session.metrics.totalLbsLifted,
       totalSets: session.metrics.totalSets,
       totalReps: session.metrics.totalReps,
-      previousSessionTotalLbsDelta: session.metrics.previousSessionTotalLbsDelta ?? null,
+      previousSessionTotalLbsDelta:
+        filteredSessionContext.previousSessionTotalLbsDeltaById.get(session.session.id) ??
+        null,
     }));
 
   return {
@@ -436,7 +501,11 @@ export const buildDashboardAnalyticsView = async ({
       totalSets: latestSession.metrics.totalSets,
       totalReps: latestSession.metrics.totalReps,
     },
-    sessionComparison: buildSessionComparison(latestSession),
+    sessionComparison: buildSessionComparison(
+      filteredSessionContext.previousSessionTotalLbsDeltaById.get(
+        latestSession.session.id
+      ) ?? null
+    ),
     sessionHistory,
     progression,
   };
