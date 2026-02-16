@@ -152,14 +152,17 @@ export const validateIngestionRequest = (
 ): ValidationError[] => {
   const errors: ValidationError[] = [];
 
-  if (!request.rawText.trim()) {
+  if (typeof request.rawText !== "string" || !request.rawText.trim()) {
     errors.push({
       field: "rawText",
       message: "rawText is required and cannot be empty.",
     });
   }
 
-  if (!isIsoDateTime(request.submittedAt)) {
+  if (
+    typeof request.submittedAt !== "string" ||
+    !isIsoDateTime(request.submittedAt)
+  ) {
     errors.push({
       field: "submittedAt",
       message: "submittedAt must be an ISO datetime string.",
@@ -173,7 +176,11 @@ export const validateIngestionRequest = (
     });
   }
 
-  if (request.occurredAtHint && !isIsoDateTime(request.occurredAtHint)) {
+  if (
+    typeof request.occurredAtHint === "string" &&
+    request.occurredAtHint &&
+    !isIsoDateTime(request.occurredAtHint)
+  ) {
     errors.push({
       field: "occurredAtHint",
       message: "occurredAtHint must be an ISO datetime string when provided.",
@@ -274,4 +281,3 @@ export const validateParseOutput = (
 
   return errors;
 };
-

@@ -14,10 +14,13 @@ create table if not exists workout_raw_logs (
   raw_text text not null check (length(trim(raw_text)) > 0),
   submitted_at timestamptz not null,
   ingestion_mode text not null check (ingestion_mode = 'auto_save'),
+  idempotency_key text not null unique,
   parse_status text not null check (parse_status in ('parsed', 'parsed_with_warnings', 'failed')),
   overall_confidence numeric(4, 3) check (overall_confidence between 0 and 1),
+  latest_response jsonb not null default '{}'::jsonb,
   source text not null default 'manual',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists workout_sessions (
@@ -93,6 +96,22 @@ create table if not exists ingestion_corrections (
   applied_at timestamptz
 );
 
+create table if not exists openrouter_model_logs (
+  id uuid primary key default gen_random_uuid(),
+  raw_log_id uuid not null references workout_raw_logs(id) on delete cascade,
+  parse_version integer not null check (parse_version > 0),
+  model text not null,
+  attempt integer not null check (attempt > 0),
+  request_started_at timestamptz not null,
+  request_completed_at timestamptz not null,
+  duration_ms integer not null check (duration_ms >= 0),
+  response_status integer,
+  request_payload jsonb not null default '{}'::jsonb,
+  response_payload jsonb,
+  error_message text,
+  logged_at timestamptz not null default now()
+);
+
 create index if not exists idx_workout_sessions_type_occurred_at
   on workout_sessions(workout_type_id, occurred_at desc);
 
@@ -101,6 +120,9 @@ create index if not exists idx_exercise_performance_session
 
 create index if not exists idx_set_entries_exercise
   on set_entries(exercise_performance_id, set_index);
+
+create index if not exists idx_openrouter_model_logs_raw_log
+  on openrouter_model_logs(raw_log_id, logged_at desc);
 
 insert into workout_types (slug, name, is_builtin)
 values
