@@ -56,6 +56,10 @@ const toDashboardFilterInput = (
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const filterInput = toDashboardFilterInput(searchParams);
+  const correctionState = firstQueryValue(searchParams?.correction);
+  const correctionError = firstQueryValue(searchParams?.error);
+  const correctionParseVersion = firstQueryValue(searchParams?.parseVersion);
+  const correctionComputationVersion = firstQueryValue(searchParams?.computationVersion);
   const view = await buildDashboardAnalyticsView({
     repository: getDefaultWorkoutIngestionRepository(),
     filter: filterInput,
@@ -65,9 +69,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <main style={{ margin: "2rem auto", maxWidth: 1100, fontFamily: "sans-serif" }}>
       <h1>Workout Analytics Dashboard</h1>
       <p>
-        Filter by workout type and date range to inspect latest-session metrics, trends, and
-        progression.
+        Filter by workout type and date range to inspect latest-session metrics, trends,
+        AI insights, and correction history.
       </p>
+      {correctionState === "applied" ? (
+        <p style={{ marginTop: "0.75rem", color: "green" }}>
+          Correction applied. Parse version {correctionParseVersion ?? "N/A"}, computation
+          version {correctionComputationVersion ?? "N/A"}.
+        </p>
+      ) : null}
+      {correctionState === "error" ? (
+        <p style={{ marginTop: "0.75rem", color: "crimson" }}>
+          Correction failed: {correctionError ?? "Unknown correction error."}
+        </p>
+      ) : null}
 
       <form method="get" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <label>
@@ -150,6 +165,51 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           ) : null}
 
           <section style={{ marginTop: "1.5rem" }}>
+            <h2>AI Session Insights</h2>
+            {view.sessionInsights.length === 0 ? (
+              <p>No insights available for the current filters.</p>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th align="left">Session</th>
+                    <th align="left">Mode</th>
+                    <th align="left">Headline</th>
+                    <th align="left">Summary</th>
+                    <th align="left">Recommendations</th>
+                    <th align="left">Anomalies</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.sessionInsights.map((insight) => (
+                    <tr key={insight.sessionId}>
+                      <td>
+                        {formatDate(
+                          view.sessionHistory.find((row) => row.sessionId === insight.sessionId)
+                            ?.occurredAt ?? insight.sessionId
+                        )}
+                      </td>
+                      <td>{insight.mode}</td>
+                      <td>{insight.headline}</td>
+                      <td>{insight.summary}</td>
+                      <td>
+                        {insight.recommendations.length > 0
+                          ? insight.recommendations.join(" ")
+                          : "Suppressed"}
+                      </td>
+                      <td>
+                        {insight.anomalies.length > 0
+                          ? insight.anomalies.join(" ")
+                          : "None"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section style={{ marginTop: "1.5rem" }}>
             <h2>Historical Trend</h2>
             <p>
               Window: {view.trendStats.windowStartOccurredAt
@@ -180,6 +240,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <tr>
                   <th align="left">Date</th>
                   <th align="left">Workout type</th>
+                  <th align="right">Parse v</th>
+                  <th align="right">Compute v</th>
                   <th align="right">Total lbs</th>
                   <th align="right">Sets</th>
                   <th align="right">Reps</th>
@@ -191,6 +253,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <tr key={row.sessionId}>
                     <td>{formatDate(row.occurredAt)}</td>
                     <td>{row.workoutTypeLabel}</td>
+                    <td align="right">{formatNumber(row.parseVersion)}</td>
+                    <td align="right">{formatNumber(row.computationVersion)}</td>
                     <td align="right">{formatNumber(row.totalLbsLifted)}</td>
                     <td align="right">{formatNumber(row.totalSets)}</td>
                     <td align="right">{formatNumber(row.totalReps)}</td>
@@ -199,6 +263,67 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 ))}
               </tbody>
             </table>
+          </section>
+
+          <section style={{ marginTop: "1.5rem" }}>
+            <h2>Correct Parsed Session</h2>
+            <p>
+              Adjust one set entry (reps and weight). Corrections are audited and trigger
+              deterministic recomputation.
+            </p>
+            {view.sessionHistory.length === 0 ? (
+              <p>No sessions available to correct.</p>
+            ) : (
+              <form
+                method="post"
+                action="/api/workouts/corrections"
+                style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}
+              >
+                <input type="hidden" name="redirectTo" value="/dashboard" />
+                <label>
+                  Session
+                  <select name="sessionRef" required defaultValue="">
+                    <option value="" disabled>
+                      Select session
+                    </option>
+                    {view.sessionHistory.map((row) => (
+                      <option
+                        key={row.sessionId}
+                        value={`${row.sessionId}::${row.rawLogId}`}
+                      >
+                        {formatDate(row.occurredAt)} - {row.workoutTypeLabel}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Reason
+                  <input
+                    type="text"
+                    name="reason"
+                    required
+                    defaultValue="Manual correction"
+                  />
+                </label>
+                <label>
+                  Exercise index
+                  <input type="number" name="exerciseIndex" min={1} defaultValue={1} required />
+                </label>
+                <label>
+                  Set index
+                  <input type="number" name="setIndex" min={1} defaultValue={1} required />
+                </label>
+                <label>
+                  Reps
+                  <input type="number" name="reps" min={1} step={1} required />
+                </label>
+                <label>
+                  Weight (lbs)
+                  <input type="number" name="weightLbs" min={0} step={0.5} required />
+                </label>
+                <button type="submit">Apply correction</button>
+              </form>
+            )}
           </section>
 
           <section style={{ marginTop: "1.5rem" }}>

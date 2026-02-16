@@ -77,6 +77,21 @@ export interface WorkoutCorrectionResponse {
   sessionId: UUID;
   status: "pending" | "applied" | "rejected";
   parseVersion: number;
+  computationVersion: number;
+  appliedAt?: ISODateTimeString;
+  updatedSessionIds: UUID[];
+  session?: ParsedWorkoutSession;
+  insight?: SessionInsight;
+}
+
+export interface SessionInsight {
+  sessionId: UUID;
+  mode: "actionable" | "review";
+  confidence: number;
+  headline: string;
+  summary: string;
+  recommendations: string[];
+  anomalies: string[];
 }
 
 export const INGESTION_REQUIRED_FIELDS = [
@@ -116,4 +131,3 @@ export const PARSED_SESSION_OPTIONAL_FIELDS = [
   "exercisePerformances[].previousSessionVolumeDeltaLbs",
   "metrics.previousSessionTotalLbsDelta",
 ] as const;
-

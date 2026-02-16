@@ -47,6 +47,7 @@ export interface SessionMetrics {
   totalSets: number;
   totalReps: number;
   previousSessionTotalLbsDelta?: number | null;
+  computationVersion?: number;
   perExerciseProgression: ExerciseProgression[];
 }
 

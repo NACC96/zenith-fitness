@@ -251,6 +251,17 @@ export const validateParsedWorkoutSession = (
     });
   }
 
+  if (
+    parsedSession.metrics.computationVersion != null &&
+    (!Number.isInteger(parsedSession.metrics.computationVersion) ||
+      parsedSession.metrics.computationVersion < 1)
+  ) {
+    errors.push({
+      field: "metrics.computationVersion",
+      message: "metrics.computationVersion must be an integer greater than 0 when provided.",
+    });
+  }
+
   return errors;
 };
 

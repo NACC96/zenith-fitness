@@ -4,6 +4,8 @@ import {
   type BuiltInWorkoutTypeSlug,
   type ParsedWorkoutSession,
 } from "./model";
+import type { SessionInsight } from "./ingestion-contract";
+import { buildSessionInsight } from "./session-insights";
 
 const BUILTIN_WORKOUT_TYPE_LABELS: Record<BuiltInWorkoutTypeSlug, string> = {
   chest: "Chest",
@@ -209,9 +211,12 @@ export interface DashboardSessionComparison {
 
 export interface DashboardSessionHistoryRow {
   sessionId: string;
+  rawLogId: string;
   occurredAt: string;
   workoutTypeId: string;
   workoutTypeLabel: string;
+  parseVersion: number;
+  computationVersion: number;
   totalLbsLifted: number;
   totalSets: number;
   totalReps: number;
@@ -236,6 +241,7 @@ export interface DashboardAnalyticsView {
   trendStats: DashboardTrendStats;
   latestSession: DashboardLatestSessionSummary | null;
   sessionComparison: DashboardSessionComparison | null;
+  sessionInsights: SessionInsight[];
   sessionHistory: DashboardSessionHistoryRow[];
   progression: DashboardExerciseProgressionRow[];
 }
@@ -405,6 +411,7 @@ export const buildDashboardAnalyticsView = async ({
       trendStats: emptyTrendStats,
       latestSession: null,
       sessionComparison: null,
+      sessionInsights: [],
       sessionHistory: [],
       progression: [],
     };
@@ -439,6 +446,14 @@ export const buildDashboardAnalyticsView = async ({
     latestInRangePreviousSession
   );
 
+  const sessionResponseEntries = await Promise.all(
+    filteredSessions.map(async (session) => {
+      const response = await repository.findBySessionId(session.session.id);
+      return [session.session.id, response] as const;
+    })
+  );
+  const sessionResponseById = new Map(sessionResponseEntries);
+
   const progression = [...latestSession.exercisePerformances]
     .sort((left, right) => left.exerciseOrder - right.exerciseOrder)
     .map((exercise) => {
@@ -462,9 +477,12 @@ export const buildDashboardAnalyticsView = async ({
     .reverse()
     .map((session) => ({
       sessionId: session.session.id,
+      rawLogId: session.session.rawLogId,
       occurredAt: session.session.occurredAt,
       workoutTypeId: session.session.workoutTypeId,
       workoutTypeLabel: resolveWorkoutTypeLabel(session.session.workoutTypeId),
+      parseVersion: session.session.parseVersion,
+      computationVersion: session.metrics.computationVersion ?? 1,
       totalLbsLifted: session.metrics.totalLbsLifted,
       totalSets: session.metrics.totalSets,
       totalReps: session.metrics.totalReps,
@@ -472,6 +490,23 @@ export const buildDashboardAnalyticsView = async ({
         filteredSessionContext.previousSessionTotalLbsDeltaById.get(session.session.id) ??
         null,
     }));
+
+  const sessionInsights = [...filteredSessions]
+    .sort(compareSessionsByOccurredAt)
+    .reverse()
+    .map((session) => {
+      const response = sessionResponseById.get(session.session.id);
+      return buildSessionInsight({
+        session,
+        previousSession:
+          filteredSessionContext.previousSessionById.get(session.session.id) ?? null,
+        parseQuality: {
+          overallConfidence: response?.parse.overallConfidence ?? 1,
+          warnings: response?.parse.warnings ?? [],
+          errors: response?.parse.errors ?? [],
+        },
+      });
+    });
 
   return {
     filter,
@@ -506,6 +541,7 @@ export const buildDashboardAnalyticsView = async ({
         latestSession.session.id
       ) ?? null
     ),
+    sessionInsights,
     sessionHistory,
     progression,
   };

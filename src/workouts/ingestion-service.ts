@@ -196,10 +196,20 @@ export class WorkoutIngestionService {
           workoutTypeId: parseOutput.session.session.workoutTypeId,
           occurredAt: parseOutput.session.session.occurredAt,
         });
+      const recomputedSession = recomputeParsedSessionMetrics(
+        parseOutput.session,
+        previousSession
+      );
 
       parseOutput = {
         ...parseOutput,
-        session: recomputeParsedSessionMetrics(parseOutput.session, previousSession),
+        session: {
+          ...recomputedSession,
+          metrics: {
+            ...recomputedSession.metrics,
+            computationVersion: 1,
+          },
+        },
       };
     }
 
