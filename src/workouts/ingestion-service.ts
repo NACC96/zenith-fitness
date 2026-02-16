@@ -8,6 +8,7 @@ import type {
 import type { ISODateTimeString } from "./model";
 import type { WorkoutParsingGateway } from "./openrouter-client";
 import { buildParseFailureOutput } from "./openrouter-schema";
+import { recomputeParsedSessionMetrics } from "./metrics-engine";
 import type {
   PersistIngestionRecordInput,
   WorkoutIngestionRepository,
@@ -188,6 +189,19 @@ export class WorkoutIngestionService {
       parseVersion,
       idGenerator: this.idGenerator,
     });
+
+    if (parseOutput.session) {
+      const previousSession =
+        await this.deps.repository.findMostRecentSessionBefore({
+          workoutTypeId: parseOutput.session.session.workoutTypeId,
+          occurredAt: parseOutput.session.session.occurredAt,
+        });
+
+      parseOutput = {
+        ...parseOutput,
+        session: recomputeParsedSessionMetrics(parseOutput.session, previousSession),
+      };
+    }
 
     const parseValidationErrors = validateParseOutput(parseOutput);
     if (parseValidationErrors.length > 0) {

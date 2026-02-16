@@ -2,7 +2,12 @@ import type {
   WorkoutIngestionRequest,
   WorkoutIngestionResponse,
 } from "./ingestion-contract";
-import type { ISODateTimeString } from "./model";
+import type { ISODateTimeString, ParsedWorkoutSession } from "./model";
+import {
+  filterParsedSessions,
+  findMostRecentSessionBefore as findPreviousSessionByOccurredAt,
+  type WorkoutSessionFilter,
+} from "./metrics-engine";
 import type { OpenRouterModelResponseLog } from "./openrouter-client";
 
 export interface PersistIngestionRecordInput {
@@ -17,6 +22,11 @@ export interface WorkoutIngestionRepository {
   findByIdempotencyKey(
     idempotencyKey: string
   ): Promise<WorkoutIngestionResponse | null>;
+  findMostRecentSessionBefore(input: {
+    workoutTypeId: string;
+    occurredAt: ISODateTimeString;
+  }): Promise<ParsedWorkoutSession | null>;
+  listParsedSessions(filter?: WorkoutSessionFilter): Promise<ParsedWorkoutSession[]>;
   persistIngestionRecord(input: PersistIngestionRecordInput): Promise<void>;
 }
 
@@ -37,6 +47,21 @@ export class InMemoryWorkoutIngestionRepository
     return existing ? structuredClone(existing) : null;
   }
 
+  async findMostRecentSessionBefore(input: {
+    workoutTypeId: string;
+    occurredAt: ISODateTimeString;
+  }): Promise<ParsedWorkoutSession | null> {
+    return (
+      findPreviousSessionByOccurredAt(this.readParsedSessions(), input) ?? null
+    );
+  }
+
+  async listParsedSessions(
+    filter: WorkoutSessionFilter = {}
+  ): Promise<ParsedWorkoutSession[]> {
+    return filterParsedSessions(this.readParsedSessions(), filter);
+  }
+
   async persistIngestionRecord(input: PersistIngestionRecordInput): Promise<void> {
     if (this.responsesByIdempotencyKey.has(input.idempotencyKey)) {
       return;
@@ -52,6 +77,13 @@ export class InMemoryWorkoutIngestionRepository
   // Verification helper for scripts/tests.
   snapshot(): PersistIngestionRecordInput[] {
     return structuredClone(this.persistedRecords);
+  }
+
+  private readParsedSessions(): ParsedWorkoutSession[] {
+    return this.persistedRecords
+      .map((record) => record.response.parse.session)
+      .filter((session): session is ParsedWorkoutSession => Boolean(session))
+      .map((session) => structuredClone(session));
   }
 }
 
@@ -75,6 +107,12 @@ export class PostgresWorkoutIngestionRepository
     this.db = db;
   }
 
+  private toParsedSession(
+    response: WorkoutIngestionResponse
+  ): ParsedWorkoutSession | null {
+    return response.parse.session ? structuredClone(response.parse.session) : null;
+  }
+
   async findByIdempotencyKey(
     idempotencyKey: string
   ): Promise<WorkoutIngestionResponse | null> {
@@ -89,6 +127,77 @@ export class PostgresWorkoutIngestionRepository
     );
 
     return result.rows[0]?.latest_response ?? null;
+  }
+
+  async findMostRecentSessionBefore(input: {
+    workoutTypeId: string;
+    occurredAt: ISODateTimeString;
+  }): Promise<ParsedWorkoutSession | null> {
+    const result = await this.db.query<RawLogLookupRow>(
+      `
+      select latest_response
+      from workout_raw_logs
+      where latest_response->'parse'->'session' is not null
+        and latest_response->'parse'->'session' <> 'null'::jsonb
+        and latest_response->'parse'->'session'->'session'->>'workoutTypeId' = $1
+        and (
+          latest_response->'parse'->'session'->'session'->>'occurredAt'
+        )::timestamptz < $2::timestamptz
+      order by
+        (
+          latest_response->'parse'->'session'->'session'->>'occurredAt'
+        )::timestamptz desc,
+        latest_response->>'rawLogId' desc
+      limit 1
+      `,
+      [input.workoutTypeId, input.occurredAt]
+    );
+
+    const previousResponse = result.rows[0]?.latest_response;
+    return previousResponse ? this.toParsedSession(previousResponse) : null;
+  }
+
+  async listParsedSessions(
+    filter: WorkoutSessionFilter = {}
+  ): Promise<ParsedWorkoutSession[]> {
+    const result = await this.db.query<RawLogLookupRow>(
+      `
+      select latest_response
+      from workout_raw_logs
+      where latest_response->'parse'->'session' is not null
+        and latest_response->'parse'->'session' <> 'null'::jsonb
+        and (
+          $1::text is null or
+          latest_response->'parse'->'session'->'session'->>'workoutTypeId' = $1
+        )
+        and (
+          $2::timestamptz is null or
+          (
+            latest_response->'parse'->'session'->'session'->>'occurredAt'
+          )::timestamptz >= $2::timestamptz
+        )
+        and (
+          $3::timestamptz is null or
+          (
+            latest_response->'parse'->'session'->'session'->>'occurredAt'
+          )::timestamptz <= $3::timestamptz
+        )
+      order by
+        (
+          latest_response->'parse'->'session'->'session'->>'occurredAt'
+        )::timestamptz asc,
+        latest_response->>'rawLogId' asc
+      `,
+      [
+        filter.workoutTypeId ?? null,
+        filter.startOccurredAt ?? null,
+        filter.endOccurredAt ?? null,
+      ]
+    );
+
+    return result.rows
+      .map((row) => this.toParsedSession(row.latest_response))
+      .filter((session): session is ParsedWorkoutSession => Boolean(session));
   }
 
   async persistIngestionRecord(input: PersistIngestionRecordInput): Promise<void> {
