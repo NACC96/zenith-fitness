@@ -51,17 +51,22 @@ const toWorkoutIngestionRequest = (
   };
 };
 
-export const createDefaultWorkoutIngestionService = (): WorkoutIngestionService => {
-  const deps: WorkoutIngestionServiceDependencies = {
-    parser: new OpenRouterWorkoutParser({
-      apiKey: process.env.OPENROUTER_API_KEY ?? "",
-      referer: process.env.OPENROUTER_REFERER,
-      title: "Zenith Fitness Ingestion",
-    }),
-    repository: new InMemoryWorkoutIngestionRepository(),
-  };
+const defaultRepository = new InMemoryWorkoutIngestionRepository();
+const defaultDependencies: WorkoutIngestionServiceDependencies = {
+  parser: new OpenRouterWorkoutParser({
+    apiKey: process.env.OPENROUTER_API_KEY ?? "",
+    referer: process.env.OPENROUTER_REFERER,
+    title: "Zenith Fitness Ingestion",
+  }),
+  repository: defaultRepository,
+};
+const defaultWorkoutIngestionService = new WorkoutIngestionService(defaultDependencies);
 
-  return new WorkoutIngestionService(deps);
+export const getDefaultWorkoutIngestionRepository =
+  (): InMemoryWorkoutIngestionRepository => defaultRepository;
+
+export const createDefaultWorkoutIngestionService = (): WorkoutIngestionService => {
+  return defaultWorkoutIngestionService;
 };
 
 export const createWorkoutIngestionPostHandler = (
