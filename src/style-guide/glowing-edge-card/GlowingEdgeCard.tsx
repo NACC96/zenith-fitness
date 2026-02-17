@@ -15,7 +15,7 @@ function getCenter(rect: DOMRect): [number, number] {
   return [rect.width / 2, rect.height / 2];
 }
 
-function getPointerData(rect: DOMRect, event: React.MouseEvent<HTMLDivElement>) {
+function getPointerData(rect: DOMRect, event: React.MouseEvent<HTMLDivElement> | React.PointerEvent<HTMLDivElement>) {
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
   const pointerX = clamp((100 / rect.width) * x);
@@ -69,7 +69,8 @@ export function GlowingEdgeCard({
 }: GlowingEdgeCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const timeoutRef = useRef<any>(null);
   const isAnimatingRef = useRef(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -155,7 +156,7 @@ export function GlowingEdgeCard({
   }, [startIntroAnimation, stopAnimation]);
 
   const handlePointerMove = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
+    (event: React.PointerEvent<HTMLDivElement>) => {
       if (onPointerMove) {
         onPointerMove(event);
       }

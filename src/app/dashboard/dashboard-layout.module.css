@@ -1,0 +1,253 @@
+.dashboardViewport {
+  position: relative;
+  min-height: 100vh;
+  padding: clamp(0.85rem, 2.4vw, 1.25rem);
+  background:
+    radial-gradient(circle at 20% 10%, rgb(255 255 255 / 0.04), transparent 38%),
+    radial-gradient(circle at 80% 90%, rgb(204 255 0 / 0.05), transparent 52%),
+    radial-gradient(circle at 20% 80%, rgb(16 185 129 / 0.04), transparent 44%),
+    var(--sg-bg);
+  overflow: hidden;
+  font-family: var(--sg-font-heading);
+  color: var(--sg-text-primary);
+}
+
+.dashboardViewport::before,
+.dashboardViewport::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dashboardViewport::before {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    radial-gradient(circle at 40% 8%, rgb(204 255 0 / 0.36), transparent 56%),
+    radial-gradient(circle at 95% 70%, rgb(16 185 129 / 0.22), transparent 60%),
+    radial-gradient(circle at 45% 120%, rgb(255 255 255 / 0.08), transparent 52%);
+  background-size: var(--sg-grid-size) var(--sg-grid-size);
+  mask-image: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.85) 45%, rgb(255 255 255 / 0) 78%);
+  filter: blur(120px);
+  opacity: 0.9;
+}
+
+.dashboardViewport::after {
+  background-image: radial-gradient(circle at 20% 24%, rgb(204 255 0 / 0.2), transparent 48%);
+  mix-blend-mode: screen;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.noiseLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  opacity: var(--sg-noise-opacity);
+  mix-blend-mode: overlay;
+  z-index: 1;
+}
+
+.dashboardShell {
+  position: relative;
+  z-index: 2;
+  min-height: calc(100vh - 1.7rem);
+  max-width: 1600px;
+  margin: 0 auto;
+  border-radius: var(--sg-shell-radius);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow: 0 30px 100px rgb(0 0 0 / 0.8), inset 0 0 0 1px rgb(255 255 255 / 0.06);
+  background: var(--sg-shell);
+  padding: clamp(1rem, 2.8vw, 2rem);
+}
+
+.dashboardShell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(130deg, rgb(255 255 255 / 0.08), transparent 52%);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.topHeader {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  align-items: center;
+  gap: 0.85rem;
+  grid-template-columns: auto 1fr auto;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: color-mix(in srgb, var(--sg-glass-bg) 70%, transparent);
+  backdrop-filter: blur(16px);
+  padding: 0.55rem 0.8rem;
+}
+
+.topHeader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.4;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  z-index: -1;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 13rem;
+}
+
+.brandBadge {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.6rem;
+  display: grid;
+  place-items: center;
+  background: var(--sg-accent);
+  color: #000;
+  font-weight: 700;
+  font-family: var(--sg-font-mono);
+}
+
+.brandText {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+.navPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  width: fit-content;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sg-glass-bg) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sg-glass-border) 90%, transparent);
+  padding: 0.35rem;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.navLink {
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgb(255 255 255 / 0.7);
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.7rem;
+  transition: background-color 220ms ease, color 220ms ease, transform 220ms ease;
+  font-family: var(--sg-font-mono);
+}
+
+.navLink:hover,
+.navLink:focus-visible {
+  color: #000;
+  background: var(--sg-accent);
+  transform: translateY(-1px);
+}
+
+.statusWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.statusTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.4rem 0.65rem;
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.2);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  color: rgb(255 255 255 / 0.75);
+  font-family: var(--sg-font-mono);
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sg-accent);
+  animation: sgPulse 2s ease-in-out infinite;
+}
+
+.statusButton {
+  width: 2.05rem;
+  height: 2.05rem;
+  border-radius: 999px;
+  border: none;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  border: 1px solid color-mix(in srgb, var(--sg-accent) 20%, transparent);
+  color: #000;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgb(204 255 0 / 0.3);
+}
+
+.statusButton:focus-visible,
+.statusButton:hover {
+  transform: scale(1.04);
+  outline: 2px solid var(--sg-accent-soft);
+}
+
+.pageBody {
+  position: relative;
+  z-index: 2;
+  margin-top: 1rem;
+}
+
+@keyframes sgPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@media (max-width: 920px) {
+  .topHeader {
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+  }
+
+  .navPill {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .navPill {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .topHeader {
+    grid-template-columns: auto 1fr;
+    align-items: flex-start;
+  }
+
+  .brand {
+    min-width: auto;
+  }
+
+  .statusWrap {
+    align-self: stretch;
+  }
+}

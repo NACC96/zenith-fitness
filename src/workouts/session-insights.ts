@@ -2,12 +2,12 @@ import type { ParseIssue, SessionInsight } from "./ingestion-contract";
 import type { ParsedWorkoutSession } from "./model";
 
 const LOW_CONFIDENCE_THRESHOLD = 0.85;
-const SUPPRESSION_WARNING_CODES = new Set([
+const SUPPRESSION_WARNING_CODES = new Set<string>([
   "AMBIGUOUS_VALUE",
   "MISSING_FIELD",
   "INVALID_VALUE",
   "INTERNAL_ERROR",
-] as const);
+]);
 
 const roundToHundredths = (value: number): number => Math.round(value * 100) / 100;
 

@@ -1,0 +1,122 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.card {
+  animation: sgFadeMove 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+  background: var(--sg-glass-bg);
+  border: 1px solid var(--sg-glass-border);
+  backdrop-filter: blur(16px);
+  border-radius: var(--sg-card-radius);
+  padding: 1.25rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@keyframes sgFadeMove {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card:nth-child(2)  { animation-delay: 60ms; }
+.card:nth-child(3)  { animation-delay: 120ms; }
+.card:nth-child(4)  { animation-delay: 180ms; }
+.card:nth-child(5)  { animation-delay: 240ms; }
+.card:nth-child(6)  { animation-delay: 300ms; }
+.card:nth-child(7)  { animation-delay: 360ms; }
+.card:nth-child(8)  { animation-delay: 420ms; }
+.card:nth-child(9)  { animation-delay: 480ms; }
+.card:nth-child(10) { animation-delay: 540ms; }
+.card:nth-child(11) { animation-delay: 600ms; }
+.card:nth-child(12) { animation-delay: 660ms; }
+
+.exerciseName {
+  margin: 0;
+  font-family: var(--sg-font-heading, 'Space Grotesk', monospace);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sg-text-primary, #ebebeb);
+  line-height: 1.3;
+}
+
+.statsRow {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.statBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.statValue {
+  font-family: var(--sg-font-mono, 'JetBrains Mono', monospace);
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--sg-text-primary, #ebebeb);
+  margin: 0;
+}
+
+.statLabel {
+  font-family: var(--sg-font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sg-text-secondary, rgb(235 235 235 / 0.64));
+  margin: 0;
+}
+
+.deltasRow {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--sg-glass-border);
+}
+
+.delta {
+  font-family: var(--sg-font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.deltaPositive {
+  color: #ccff00;
+}
+
+.deltaNegative {
+  color: #f87171;
+}
+
+.deltaZero {
+  color: var(--sg-text-disabled, rgb(235 235 235 / 0.3));
+}

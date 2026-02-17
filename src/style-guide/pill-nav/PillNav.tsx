@@ -89,7 +89,7 @@ export function PillNav({
 
         const radius = ((width * width) / 4 + height * height) / (2 * height);
         const diameter = Math.ceil(2 * radius) + 2;
-        const delta = Math.ceil(radius - Math.sqrt(Math.max(0, radius * radius - (width * width) / 4)) + 1;
+        const delta = Math.ceil(radius - Math.sqrt(Math.max(0, radius * radius - (width * width) / 4)) + 1);
         const originY = diameter - delta;
 
         circle.style.width = `${diameter}px`;

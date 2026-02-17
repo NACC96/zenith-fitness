@@ -1,0 +1,187 @@
+.shell {
+  position: relative;
+  width: 100%;
+  --insight-bg: rgb(11 18 32 / 1);
+  --insight-card-bg: rgb(15 23 42 / 0.85);
+  --insight-card-border: rgb(255 255 255 / 0.08);
+  --insight-card-hover-border: rgb(255 255 255 / 0.18);
+  --insight-text: #f8fafc;
+  --insight-text-secondary: #94a3b8;
+  --insight-viewport-bg: linear-gradient(180deg, rgb(8 8 10 / 0.2), rgb(8 8 10 / 0.55));
+  --insight-top-gradient: linear-gradient(180deg, rgb(10 11 12 / 0.95), transparent);
+  --insight-bottom-gradient: linear-gradient(0deg, rgb(8 8 10 / 0.95), transparent);
+  --badge-actionable-bg: #a3e635;
+  --badge-actionable-text: #1a2e05;
+  --badge-review-bg: #059669;
+  --badge-review-text: #ecfdf5;
+  --anomaly-bg: rgb(239 68 68 / 0.15);
+  --anomaly-border: rgb(239 68 68 / 0.35);
+  --anomaly-text: #fca5a5;
+}
+
+.viewport {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 0.8rem 0.65rem;
+  border-radius: 1rem;
+  background: var(--insight-viewport-bg);
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: #222 #09090f;
+  outline: none;
+}
+
+.viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.viewport::-webkit-scrollbar-track {
+  background: #09090f;
+}
+
+.viewport::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 999px;
+}
+
+.viewport::-webkit-scrollbar-thumb:hover {
+  background: #74748c;
+}
+
+.topGradient,
+.bottomGradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.topGradient {
+  top: 0;
+  height: 4rem;
+  background: var(--insight-top-gradient);
+  border-radius: 1rem 1rem 0 0;
+}
+
+.bottomGradient {
+  bottom: 0;
+  height: 5.2rem;
+  background: var(--insight-bottom-gradient);
+  border-radius: 0 0 1rem 1rem;
+}
+
+.itemWrapper {
+  margin-bottom: 0.7rem;
+}
+
+.card {
+  border-radius: 0.85rem;
+  padding: 1rem 1.1rem;
+  background: var(--insight-card-bg);
+  border: 1px solid var(--insight-card-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 22px -18px rgb(15 23 42 / 0.8);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.card:hover {
+  border-color: var(--insight-card-hover-border);
+  box-shadow: 0 8px 24px -14px rgb(59 130 246 / 0.4);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.date {
+  font-size: 0.75rem;
+  color: var(--insight-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.2em 0.65em;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.badgeActionable {
+  background: var(--badge-actionable-bg);
+  color: var(--badge-actionable-text);
+}
+
+.badgeReview {
+  background: var(--badge-review-bg);
+  color: var(--badge-review-text);
+}
+
+.headline {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--insight-text);
+  line-height: 1.35;
+}
+
+.summary {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--insight-text-secondary);
+  line-height: 1.5;
+}
+
+.recommendations {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+
+.recommendations li {
+  font-size: 0.82rem;
+  color: var(--insight-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 0.2rem;
+}
+
+.recommendations li:last-child {
+  margin-bottom: 0;
+}
+
+.anomalies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.anomalyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  font-size: 0.72rem;
+  padding: 0.25em 0.6em;
+  border-radius: 0.4rem;
+  background: var(--anomaly-bg);
+  border: 1px solid var(--anomaly-border);
+  color: var(--anomaly-text);
+  font-weight: 500;
+}
+
+.emptyAnimatedList {
+  max-width: 100%;
+}
+
+.emptyItem {
+  text-align: center;
+  color: #64748b !important;
+  font-size: 0.9rem;
+}

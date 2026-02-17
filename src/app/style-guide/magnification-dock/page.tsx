@@ -1,3 +1,5 @@
+"use client";
+
 import Link from 'next/link';
 import { Bell, Camera, Heart, Home, Search, Settings, User } from 'lucide-react';
 import { MagnificationDock, DockItemData } from '../../../style-guide/magnification-dock';

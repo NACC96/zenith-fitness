@@ -45,7 +45,7 @@ export function NeonTypingButton({
         '--neon-reveal-length': revealLength,
         '--neon-pulse-opacity': pulse ? '1' : '0',
         ...(props.style as React.CSSProperties)
-      }}
+      } as React.CSSProperties}
     >
       <span className={styles.labelBase} aria-hidden={!!children}>
         {children ?? text}

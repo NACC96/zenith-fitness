@@ -57,6 +57,7 @@ export interface AnimatedListProps {
   itemClassName?: string;
   displayScrollbar?: boolean;
   initialSelectedIndex?: number;
+  renderItem?: (item: string, index: number, selected: boolean) => React.ReactNode;
 }
 
 const DEFAULT_ITEMS = [
@@ -85,7 +86,8 @@ export function AnimatedList({
   className = '',
   itemClassName = '',
   displayScrollbar = true,
-  initialSelectedIndex = -1
+  initialSelectedIndex = -1,
+  renderItem
 }: AnimatedListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(() =>
@@ -207,9 +209,13 @@ export function AnimatedList({
             onMouseEnter={() => handleItemMouseEnter(index)}
             onClick={() => handleItemClick(item, index)}
           >
-            <div className={`${styles.itemContent} ${selectedIndex === index ? styles.itemContentSelected : ''} ${itemClassName}`}>
-              <p className={styles.itemText}>{item}</p>
-            </div>
+            {renderItem ? (
+              renderItem(item, index, selectedIndex === index)
+            ) : (
+              <div className={`${styles.itemContent} ${selectedIndex === index ? styles.itemContentSelected : ''} ${itemClassName}`}>
+                <p className={styles.itemText}>{item}</p>
+              </div>
+            )}
           </AnimatedItem>
         ))}
       </div>
