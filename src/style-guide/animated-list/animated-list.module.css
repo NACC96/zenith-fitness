@@ -1,0 +1,122 @@
+.shell {
+  position: relative;
+  width: 100%;
+  --list-bg: var(--sg-bg, rgb(11 18 32 / 1));
+  --list-text: var(--sg-list-text, #f8fafc);
+  --list-soft: var(--sg-list-soft, #cbd5e1);
+  --list-selected-bg: var(--sg-list-item-selected-bg, #1f2937);
+  --list-item-bg: var(--sg-list-item-bg, rgb(15 23 42 / 1));
+  --list-item-selected-bg: var(--sg-list-item-selected-bg, #1e293b);
+  --list-item-border: var(--sg-list-item-border, rgb(255 255 255 / 0.07));
+  --list-item-hover-border: var(--sg-list-item-hover-border, rgb(255 255 255 / 0.18));
+  --list-item-selected-border: var(--sg-list-item-selected-border, rgb(255 255 255 / 0.35));
+  --list-viewport-bg: var(--sg-list-bg, linear-gradient(180deg, rgb(8 8 10 / 0.2), rgb(8 8 10 / 0.55)));
+  --list-top-gradient: var(--sg-list-top-gradient, linear-gradient(180deg, rgb(10 11 12 / 0.95), rgb(10 11 12 / 0.15)));
+  --list-bottom-gradient: var(--sg-list-bottom-gradient, linear-gradient(0deg, rgb(8 8 10 / 0.95), rgb(8 8 10 / 0.05)));
+  --list-scrollbar-track: var(--sg-list-scrollbar-track, #09090f);
+  --list-scrollbar-thumb: var(--sg-list-scrollbar-thumb, #222);
+  --list-scrollbar-thumb-hover: var(--sg-list-scrollbar-thumb-hover, #74748c);
+}
+
+.viewport {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0.8rem 0.65rem;
+  border-radius: 1rem;
+  background: var(--list-viewport-bg);
+  position: relative;
+  outline: none;
+}
+
+.viewportScrollable {
+  scrollbar-width: thin;
+  scrollbar-color: var(--list-scrollbar-thumb) var(--list-scrollbar-track);
+}
+
+.viewportHideScrollbar {
+  scrollbar-width: none;
+}
+
+.viewportHideScrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.itemMotion {
+  margin-bottom: 0.7rem;
+  cursor: pointer;
+}
+
+.itemMotionSelected {
+  /* Keeps a stronger local focus signal while selected */
+}
+
+.itemContent {
+  border-radius: 0.85rem;
+  padding: 0.8rem 1rem;
+  background: var(--list-item-bg);
+  color: var(--list-text);
+  border: 1px solid var(--list-item-border);
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+  box-shadow: 0 10px 22px -18px rgb(15 23 42 / 0.8);
+}
+
+.itemContent:hover {
+  border-color: var(--list-item-hover-border);
+}
+
+.itemContentSelected {
+  background: var(--list-item-selected-bg);
+  border-color: var(--list-item-selected-border);
+  box-shadow: 0 8px 22px -15px rgb(59 130 246 / 0.5);
+}
+
+.itemText {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--list-text);
+}
+
+.topGradient,
+.bottomGradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+
+.topGradient {
+  top: 0;
+  height: 4rem;
+  background: var(--list-top-gradient);
+}
+
+.bottomGradient {
+  bottom: 0;
+  height: 5.2rem;
+  background: var(--list-bottom-gradient);
+}
+
+/* WebKit scrollbar styling for custom visible mode */
+.viewportScrollable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.viewportScrollable::-webkit-scrollbar-track {
+  background: var(--list-scrollbar-track);
+}
+
+.viewportScrollable::-webkit-scrollbar-thumb {
+  background: var(--list-scrollbar-thumb);
+  border-radius: 999px;
+}
+
+.viewportScrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--list-scrollbar-thumb-hover);
+}

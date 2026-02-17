@@ -1,0 +1,218 @@
+.neonTypingButton {
+  --neon-base-text: rgba(255, 255, 255, 0.55);
+  --neon-reveal-text: #ffe7ff;
+  --neon-glow: #c026d3;
+  --neon-cursor: #f8c7ff;
+  --neon-reveal-length: 12ch;
+  --neon-pulse-opacity: 1;
+  --neon-reveal-spacing: 0.3ch;
+  --neon-cursor-width: 0.7ch;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--neon-glow) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.95rem 1.45rem;
+  min-width: 14rem;
+  background:
+    radial-gradient(circle at 22% 25%, rgb(255 255 255 / 0.12), transparent 42%),
+    linear-gradient(120deg, rgb(15 23 42 / 0.62), rgb(30 27 58 / 0.85));
+  color: var(--neon-base-text);
+  font-size: 0.88rem;
+  font-family: var(--sg-font-heading, 'Space Grotesk', 'JetBrains Mono', monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+  transition:
+    color 260ms ease,
+    border-color 260ms ease,
+    transform 220ms ease,
+    box-shadow 260ms ease,
+    background-color 260ms ease;
+}
+
+.neonTypingButton::before,
+.neonTypingButton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.neonTypingButton::before {
+  inset: -1px;
+  background:
+    radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.25), transparent 58%),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--neon-glow) 70%, transparent) 0%,
+      rgb(10 14 20 / 0.7) 42%,
+      color-mix(in srgb, var(--neon-glow) 35%, transparent) 100%
+    );
+  mix-blend-mode: screen;
+  filter: blur(16px);
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.neonTypingButton::after {
+  box-shadow:
+    0 0 0 0 color-mix(in srgb, var(--neon-glow) 14%, transparent),
+    0 0 26px 0px color-mix(in srgb, var(--neon-glow) 35%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--neon-glow) 10%, transparent);
+  opacity: calc(var(--neon-pulse-opacity));
+  transition: opacity 280ms ease, box-shadow 280ms ease;
+}
+
+.neonTypingButton:hover,
+.neonTypingButton:focus-visible {
+  color: var(--neon-reveal-text);
+  border-color: color-mix(in srgb, var(--neon-glow) 65%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-glow) 50%, transparent) inset,
+    0 0 24px 1px color-mix(in srgb, var(--neon-glow) 30%, transparent);
+  transform: translateY(-1px) scale(1.05);
+}
+
+.neonTypingButton:hover::before {
+  opacity: 0.72;
+  animation: buttonGlow 2.8s ease-in-out infinite;
+}
+
+.neonTypingButton:hover::after,
+.neonTypingButton:focus-visible::after {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neon-glow) 34%, transparent),
+    0 0 34px 4px color-mix(in srgb, var(--neon-glow) 36%, transparent),
+    inset 0 0 30px 1px color-mix(in srgb, var(--neon-glow) 22%, transparent);
+}
+
+.neonTypingButton:hover {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--neon-glow) 35%, transparent);
+}
+
+.neonTypingButton:active {
+  transform: translateY(0);
+}
+
+.neonTypingButton:focus-visible {
+  box-shadow:
+    0 0 0 3px rgb(255 255 255 / 0.08),
+    0 0 0 6px color-mix(in srgb, var(--neon-glow) 28%, transparent);
+}
+
+.neonTypingButton > span {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+}
+
+.labelBase {
+  transition: opacity 220ms ease;
+}
+
+.neonTypingButton:hover .labelBase {
+  opacity: 0;
+}
+
+.labelReveal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.labelRevealText {
+  display: inline-flex;
+  align-items: center;
+  width: 0ch;
+  max-width: 0ch;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--neon-reveal-text);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  gap: var(--neon-reveal-spacing);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--neon-reveal-text) 60%, transparent),
+    0 0 18px color-mix(in srgb, var(--neon-glow) 34%, transparent);
+  transition:
+    width 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    max-width 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease 0.2s;
+  width: 0ch;
+  max-width: 0ch;
+  opacity: 0;
+}
+
+.neonTypingButton:hover .labelRevealText {
+  width: var(--neon-reveal-length);
+  max-width: var(--neon-reveal-length);
+  opacity: 1;
+}
+
+.neonTypingButton:not(:hover):not(:focus-visible) .labelRevealText {
+  transition:
+    width 0.4s cubic-bezier(0.4, 0, 0.6, 1),
+    max-width 0.4s cubic-bezier(0.4, 0, 0.6, 1),
+    opacity 180ms ease;
+}
+
+.typingCursor {
+  display: inline-block;
+  margin-left: var(--neon-reveal-spacing);
+  margin-top: 0.02rem;
+  width: var(--neon-cursor-width);
+  color: var(--neon-cursor);
+  opacity: 0;
+  animation: cursorPulse 1s step-end infinite;
+}
+
+.neonTypingButton:hover .typingCursor {
+  opacity: 1;
+}
+
+@keyframes buttonGlow {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes cursorPulse {
+  0%,
+  50% {
+    opacity: 0.05;
+  }
+  25%,
+  75% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neonTypingButton::before {
+    animation: none;
+  }
+
+  .neonTypingButton:hover .labelRevealText {
+    width: var(--neon-reveal-length);
+    max-width: var(--neon-reveal-length);
+    transition: opacity 180ms ease;
+  }
+
+  .typingCursor {
+    animation: none;
+  }
+}

@@ -1,3 +1,4 @@
+import './style-guide/style-guide.css';
 import type { ReactNode } from "react";
 
 interface RootLayoutProps {
