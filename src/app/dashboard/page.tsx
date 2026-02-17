@@ -2,12 +2,17 @@ import {
   buildDashboardAnalyticsView,
   type DashboardFilterInput,
 } from "../../workouts/dashboard-analytics";
-import { getDefaultWorkoutIngestionRepository } from "../../workouts/ingestion-endpoint";
+import {
+  ensureDefaultWorkoutMockDataSeeded,
+  getDefaultWorkoutIngestionRepository,
+} from "../../workouts/ingestion-endpoint";
 
 type SearchParamValue = string | string[] | undefined;
 
 interface DashboardPageProps {
-  searchParams?: Record<string, SearchParamValue>;
+  searchParams?:
+    | Promise<Record<string, SearchParamValue>>
+    | Record<string, SearchParamValue>;
 }
 
 const firstQueryValue = (value: SearchParamValue): string | undefined => {
@@ -54,12 +59,24 @@ const toDashboardFilterInput = (
   };
 };
 
+const resolveSearchParams = async (
+  searchParams: DashboardPageProps["searchParams"]
+): Promise<Record<string, SearchParamValue>> => {
+  const resolved = await searchParams;
+  return resolved ?? {};
+};
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const filterInput = toDashboardFilterInput(searchParams);
-  const correctionState = firstQueryValue(searchParams?.correction);
-  const correctionError = firstQueryValue(searchParams?.error);
-  const correctionParseVersion = firstQueryValue(searchParams?.parseVersion);
-  const correctionComputationVersion = firstQueryValue(searchParams?.computationVersion);
+  await ensureDefaultWorkoutMockDataSeeded();
+
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
+  const filterInput = toDashboardFilterInput(resolvedSearchParams);
+  const correctionState = firstQueryValue(resolvedSearchParams.correction);
+  const correctionError = firstQueryValue(resolvedSearchParams.error);
+  const correctionParseVersion = firstQueryValue(resolvedSearchParams.parseVersion);
+  const correctionComputationVersion = firstQueryValue(
+    resolvedSearchParams.computationVersion
+  );
   const view = await buildDashboardAnalyticsView({
     repository: getDefaultWorkoutIngestionRepository(),
     filter: filterInput,

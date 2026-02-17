@@ -3,7 +3,6 @@ import type {
   WorkoutCorrectionRequest,
   WorkoutIngestionRequest,
 } from "./ingestion-contract";
-import { InMemoryWorkoutIngestionRepository } from "./ingestion-repository";
 import { OpenRouterWorkoutParser } from "./openrouter-client";
 import {
   IngestionValidationError,
@@ -14,6 +13,10 @@ import {
   CorrectionValidationError,
   WorkoutCorrectionService,
 } from "./correction-service";
+import {
+  ensureDefaultWorkoutMockDataSeeded as ensureDefaultWorkoutMockDataSeededInternal,
+  getDefaultWorkoutMockRepository,
+} from "./mock-seed";
 
 const json = (body: unknown, status: number): Response =>
   new Response(JSON.stringify(body), {
@@ -59,7 +62,7 @@ const toWorkoutIngestionRequest = (
   };
 };
 
-const defaultRepository = new InMemoryWorkoutIngestionRepository();
+const defaultRepository = getDefaultWorkoutMockRepository();
 const defaultDependencies: WorkoutIngestionServiceDependencies = {
   parser: new OpenRouterWorkoutParser({
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
@@ -201,7 +204,11 @@ const toRedirectResponse = (
 };
 
 export const getDefaultWorkoutIngestionRepository =
-  (): InMemoryWorkoutIngestionRepository => defaultRepository;
+  () => defaultRepository;
+
+export const ensureDefaultWorkoutMockDataSeeded = async (): Promise<void> => {
+  await ensureDefaultWorkoutMockDataSeededInternal();
+};
 
 export const createDefaultWorkoutIngestionService = (): WorkoutIngestionService => {
   return defaultWorkoutIngestionService;
