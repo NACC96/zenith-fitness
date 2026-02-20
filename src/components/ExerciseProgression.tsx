@@ -98,7 +98,7 @@ export default function ExerciseProgression({
                 <div className="flex items-center justify-between" style={{ marginBottom: "6px" }}>
                   <span
                     style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontFamily: "var(--font-sans)",
                       fontSize: "12px",
                       color: "rgba(255,255,255,0.7)",
                     }}

@@ -162,7 +162,7 @@ export default function ChatDrawer({
                 color: "#ebebeb",
               }}
             >
-              IronLog AI
+              Zenith AI
             </span>
           </div>
 

@@ -19,11 +19,13 @@ export default function Header({ types, activeFilter, onFilterChange }: HeaderPr
         {/* Logo */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-lime">
-            <span className="text-lg font-semibold text-black">N</span>
+            <span className="text-lg font-semibold text-black">Z</span>
           </div>
-          <span className="text-lg font-semibold tracking-tight">
-            <span className="text-white">IRON</span>
-            <span className="text-lime">LOG</span>
+          <span
+            className="text-lg font-semibold tracking-widest text-white"
+            style={{ fontFamily: "var(--font-logo)" }}
+          >
+            ZENITH
           </span>
         </div>
 

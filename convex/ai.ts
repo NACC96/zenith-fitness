@@ -4,7 +4,7 @@ import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
 
-const SYSTEM_PROMPT = `You are IronLog, a workout tracking assistant. You help users log workouts and analyze their training history.
+const SYSTEM_PROMPT = `You are Zenith AI, a workout tracking assistant. You help users log workouts and analyze their training history.
 
 When a user describes exercises they did, use the logExercise tool to record them. Parse natural language like:
 - "bench 95 for 12, 115 for 6" → two sets of bench press

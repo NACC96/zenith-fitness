@@ -4,11 +4,17 @@ export default function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
       <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-lime">
-          Zenith Fitness
+        <h1
+          className="text-4xl font-bold tracking-[0.25em] text-lime"
+          style={{ fontFamily: "var(--font-logo)" }}
+        >
+          ZENITH
         </h1>
-        <p className="mt-3 text-text-secondary font-mono text-sm">
-          AI-powered workout tracking
+        <p
+          className="mt-3 text-text-secondary text-sm tracking-[0.5em] uppercase"
+          style={{ fontFamily: "var(--font-mono)" }}
+        >
+          FITNESS
         </p>
         <Link
           href="/dashboard"
