@@ -32,7 +32,7 @@ export default defineSchema({
   }).index("by_updatedAt", ["updatedAt"]),
 
   chatMessages: defineTable({
-    sessionId: v.id("chatSessions"),
+    sessionId: v.optional(v.id("chatSessions")),
     role: v.union(v.literal("user"), v.literal("assistant")),
     content: v.string(),
     model: v.optional(v.string()),
