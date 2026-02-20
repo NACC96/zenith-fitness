@@ -140,7 +140,7 @@ export const chat = internalAction({
 
     // Reasoning config — some models have mandatory reasoning, others use effort param
     const mandatoryReasoningModels = [
-      "google/gemini-2.5-pro",
+      "google/gemini-3.1-pro-preview",
       "minimax/minimax-m2.5",
     ];
     const reasoning = mandatoryReasoningModels.includes(args.model)

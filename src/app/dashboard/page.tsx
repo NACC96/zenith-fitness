@@ -21,7 +21,7 @@ export default function DashboardPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("google/gemini-2.5-pro");
+  const [selectedModel, setSelectedModel] = useState("google/gemini-3.1-pro-preview");
   const [modelInitialized, setModelInitialized] = useState(false);
 
   const rawWorkouts = useQuery(api.workoutSessions.listAll);
@@ -80,7 +80,7 @@ export default function DashboardPage() {
         >
           <div
             className="w-2 h-2 rounded-full animate-pulse"
-            style={{ background: "#ccff00" }}
+            style={{ background: "#ff2d2d" }}
           />
           <span
             className="font-mono text-[11px] uppercase tracking-widest"

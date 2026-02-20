@@ -22,11 +22,12 @@ interface ChatDrawerProps {
 }
 
 const MODELS = [
-  { label: "Gemini 2.5 Pro", value: "google/gemini-2.5-pro" },
-  { label: "Claude Sonnet 4", value: "anthropic/claude-sonnet-4" },
+  { label: "Gemini 3.1 Pro", value: "google/gemini-3.1-pro-preview" },
+  { label: "Claude Sonnet 4.6", value: "anthropic/claude-sonnet-4.6" },
   { label: "MiniMax M2.5", value: "minimax/minimax-m2.5" },
   { label: "GLM-5", value: "z-ai/glm-5" },
   { label: "Kimi K2.5", value: "moonshotai/kimi-k2.5" },
+  { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
 ];
 
 function getModelLabel(value: string): string {
@@ -56,7 +57,7 @@ function renderMarkdown(text: string): string {
   for (const line of lines) {
     if (line.startsWith("- ")) {
       out.push(
-        `<div style="display:flex;gap:8px;padding-left:8px"><span style="color:#ccff00">•</span><span>${line.slice(2)}</span></div>`,
+        `<div style="display:flex;gap:8px;padding-left:8px"><span style="color:#ff2d2d">•</span><span>${line.slice(2)}</span></div>`,
       );
     } else {
       out.push(line);
@@ -134,7 +135,7 @@ export default function ChatDrawer({
         style={{
           background: "rgba(10, 10, 10, 0.98)",
           backdropFilter: "blur(24px)",
-          borderLeft: "1px solid rgba(204,255,0,0.15)",
+          borderLeft: "1px solid rgba(255,45,45,0.15)",
           transform: isOpen ? "translateX(0)" : "translateX(100%)",
           transition: "transform 300ms ease",
         }}
@@ -149,7 +150,7 @@ export default function ChatDrawer({
             <div
               className="w-2 h-2 rounded-full"
               style={{
-                background: "#ccff00",
+                background: "#ff2d2d",
                 animation: "chatPulse 2s ease-in-out infinite",
               }}
             />
@@ -178,7 +179,7 @@ export default function ChatDrawer({
               fontSize: "10px",
             }}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = "rgba(204,255,0,0.4)";
+              e.currentTarget.style.borderColor = "rgba(255,45,45,0.4)";
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
@@ -197,7 +198,7 @@ export default function ChatDrawer({
             className="p-2 rounded-lg cursor-pointer transition-colors"
             style={{ color: "rgba(255,255,255,0.4)" }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#ccff00";
+              e.currentTarget.style.color = "#ff2d2d";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = "rgba(255,255,255,0.4)";
@@ -216,7 +217,7 @@ export default function ChatDrawer({
             className="p-2 rounded-lg cursor-pointer transition-colors"
             style={{ color: "rgba(255,255,255,0.4)" }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "#ccff00";
+              e.currentTarget.style.color = "#ff2d2d";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = "rgba(255,255,255,0.4)";
@@ -277,8 +278,8 @@ export default function ChatDrawer({
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.borderColor =
-                          "rgba(204,255,0,0.3)";
-                        e.currentTarget.style.color = "#ccff00";
+                          "rgba(255,45,45,0.3)";
+                        e.currentTarget.style.color = "#ff2d2d";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.borderColor =
@@ -304,11 +305,11 @@ export default function ChatDrawer({
                 style={{
                   background:
                     msg.role === "user"
-                      ? "rgba(204,255,0,0.08)"
+                      ? "rgba(255,45,45,0.08)"
                       : "rgba(255,255,255,0.04)",
                   border:
                     msg.role === "user"
-                      ? "1px solid rgba(204,255,0,0.15)"
+                      ? "1px solid rgba(255,45,45,0.15)"
                       : "1px solid rgba(255,255,255,0.06)",
                   borderRadius:
                     msg.role === "user"
@@ -415,7 +416,7 @@ export default function ChatDrawer({
                 maxHeight: "120px",
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = "rgba(204,255,0,0.4)";
+                e.currentTarget.style.borderColor = "rgba(255,45,45,0.4)";
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
@@ -426,10 +427,10 @@ export default function ChatDrawer({
               disabled={isLoading || !input.trim()}
               className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
-                background: "#ccff00",
+                background: "#ff2d2d",
                 boxShadow:
                   input.trim() && !isLoading
-                    ? "0 0 16px rgba(204,255,0,0.25)"
+                    ? "0 0 16px rgba(255,45,45,0.25)"
                     : "none",
               }}
             >
