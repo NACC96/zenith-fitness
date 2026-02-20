@@ -34,9 +34,9 @@ export default function SessionList({
           onClick={onAddType}
           className="font-mono text-[9px] uppercase tracking-wider px-4 py-2.5 min-h-[44px] flex items-center rounded-lg cursor-pointer"
           style={{
-            background: "rgba(204,255,0,0.1)",
-            border: "1px solid rgba(204,255,0,0.25)",
-            color: "#ccff00",
+            background: "rgba(255,45,45,0.1)",
+            border: "1px solid rgba(255,45,45,0.25)",
+            color: "#ff2d2d",
           }}
         >
           + Add Type
@@ -77,8 +77,8 @@ export default function SessionList({
                 animationDelay: `${index * 0.06}s`,
                 ...(isSelected
                   ? {
-                      background: "rgba(204,255,0,0.06)",
-                      border: "1px solid rgba(204,255,0,0.35)",
+                      background: "rgba(255,45,45,0.06)",
+                      border: "1px solid rgba(255,45,45,0.35)",
                     }
                   : {}),
               }}
@@ -89,7 +89,7 @@ export default function SessionList({
                   className="text-sm font-semibold"
                   style={{
                     fontFamily: "var(--font-sans)",
-                    color: isSelected ? "#ccff00" : "rgba(255,255,255,0.9)",
+                    color: isSelected ? "#ff2d2d" : "rgba(255,255,255,0.9)",
                   }}
                 >
                   {new Date(workout.date + "T00:00:00").toLocaleDateString(
@@ -145,7 +145,7 @@ export default function SessionList({
                     style={{
                       height: `${Math.max((vol / maxExVolume) * 100, 8)}%`,
                       background: isSelected
-                        ? `rgba(204,255,0,${0.2 + (vol / maxExVolume) * 0.4})`
+                        ? `rgba(255,45,45,${0.2 + (vol / maxExVolume) * 0.4})`
                         : `rgba(255,255,255,${0.06 + (vol / maxExVolume) * 0.12})`,
                       transition: "all 0.3s ease",
                     }}

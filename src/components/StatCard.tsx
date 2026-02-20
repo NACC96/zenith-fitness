@@ -35,7 +35,7 @@ export default function StatCard({
         className="font-bold tracking-tight text-xl md:text-2xl"
         style={{
           fontFamily: "'Space Grotesk', sans-serif",
-          color: accent ? "#ccff00" : "#ebebeb",
+          color: accent ? "#ff2d2d" : "#ebebeb",
           margin: "4px 0 0",
           lineHeight: 1.1,
         }}

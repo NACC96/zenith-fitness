@@ -28,7 +28,7 @@ export default function ExerciseRow({ exercise, isPR }: ExerciseRowProps) {
           <span
             className="font-mono text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-full"
             style={{
-              background: "#ccff00",
+              background: "#ff2d2d",
               color: "#000",
               fontWeight: 700,
             }}
@@ -46,7 +46,7 @@ export default function ExerciseRow({ exercise, isPR }: ExerciseRowProps) {
       {/* Max weight */}
       <div
         className="flex-1 text-center text-sm font-semibold"
-        style={{ color: "#ccff00" }}
+        style={{ color: "#ff2d2d" }}
       >
         {formatNum(maxWeight)} lb
       </div>

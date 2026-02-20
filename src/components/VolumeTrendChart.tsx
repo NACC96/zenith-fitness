@@ -61,8 +61,8 @@ export default function VolumeTrendChart({ workouts }: VolumeTrendChartProps) {
           <Recharts.AreaChart data={data}>
             <defs>
               <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ccff00" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#ccff00" stopOpacity={0} />
+                <stop offset="0%" stopColor="#ff2d2d" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#ff2d2d" stopOpacity={0} />
               </linearGradient>
             </defs>
             <Recharts.XAxis
@@ -89,12 +89,12 @@ export default function VolumeTrendChart({ workouts }: VolumeTrendChartProps) {
             <Recharts.Area
               type="monotone"
               dataKey="volume"
-              stroke="#ccff00"
+              stroke="#ff2d2d"
               strokeWidth={2}
               fill="url(#volumeGradient)"
               dot={{
                 r: 4,
-                fill: "#ccff00",
+                fill: "#ff2d2d",
                 stroke: "#0c0c0c",
                 strokeWidth: 2,
               }}

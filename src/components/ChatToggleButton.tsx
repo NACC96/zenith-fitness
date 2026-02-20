@@ -16,17 +16,17 @@ export default function ChatToggleButton({
       style={{
         width: "56px",
         height: "56px",
-        background: "#ccff00",
-        boxShadow: "0 0 30px rgba(204,255,0,0.3)",
+        background: "#ff2d2d",
+        boxShadow: "0 0 30px rgba(255,45,45,0.3)",
         animation: isOpen ? "none" : "chatFabPulse 2s ease-in-out 1",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "scale(1.08)";
-        e.currentTarget.style.boxShadow = "0 0 40px rgba(204,255,0,0.45)";
+        e.currentTarget.style.boxShadow = "0 0 40px rgba(255,45,45,0.45)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "scale(1)";
-        e.currentTarget.style.boxShadow = "0 0 30px rgba(204,255,0,0.3)";
+        e.currentTarget.style.boxShadow = "0 0 30px rgba(255,45,45,0.3)";
       }}
       title={isOpen ? "Close chat" : "Open chat"}
     >

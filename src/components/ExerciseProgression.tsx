@@ -109,7 +109,7 @@ export default function ExerciseProgression({
                     style={{
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: "11px",
-                      color: isPositive ? "#ccff00" : "rgba(255,255,255,0.4)",
+                      color: isPositive ? "#ff2d2d" : "rgba(255,255,255,0.4)",
                     }}
                   >
                     {isPositive ? "+" : ""}
@@ -135,7 +135,7 @@ export default function ExerciseProgression({
                       width: `${Math.max(barPct, 2)}%`,
                       borderRadius: "2px",
                       background: isPositive
-                        ? "linear-gradient(90deg, #ccff00, #a3cc00)"
+                        ? "linear-gradient(90deg, #ff2d2d, #cc2424)"
                         : "rgba(255,255,255,0.15)",
                       transition: "width 0.5s ease",
                     }}

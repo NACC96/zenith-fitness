@@ -12,7 +12,7 @@ export default function Home() {
         </p>
         <Link
           href="/dashboard"
-          className="mt-8 inline-block rounded-full bg-[#ccff00] px-10 py-4 text-base font-bold text-black shadow-[0_0_30px_rgba(204,255,0,0.3)] transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-[0_0_50px_rgba(204,255,0,0.5)]"
+          className="mt-8 inline-block rounded-full bg-[#ff2d2d] px-10 py-4 text-base font-bold text-black shadow-[0_0_30px_rgba(255,45,45,0.3)] transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-[0_0_50px_rgba(255,45,45,0.5)]"
         >
           Enter Dashboard
         </Link>

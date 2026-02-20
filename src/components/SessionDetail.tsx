@@ -84,7 +84,7 @@ export default function SessionDetail({
             <div className="flex items-center gap-2">
               <div
                 className="w-2 h-2 rounded-full animate-pulse"
-                style={{ background: "#ccff00" }}
+                style={{ background: "#ff2d2d" }}
               />
               <span className="font-mono text-[9px] uppercase tracking-wider text-white/40">
                 Session Detail
@@ -94,9 +94,9 @@ export default function SessionDetail({
           <div
             className="px-3 py-1.5 rounded-lg font-mono text-xs"
             style={{
-              background: "rgba(204,255,0,0.1)",
-              border: "1px solid rgba(204,255,0,0.25)",
-              color: "#ccff00",
+              background: "rgba(255,45,45,0.1)",
+              border: "1px solid rgba(255,45,45,0.25)",
+              color: "#ff2d2d",
             }}
           >
             {formatNum(totalVolume)} lb total
@@ -184,16 +184,16 @@ export default function SessionDetail({
                         style={{
                           borderRadius: "10px",
                           background: isMax
-                            ? "rgba(204,255,0,0.12)"
+                            ? "rgba(255,45,45,0.12)"
                             : "rgba(255,255,255,0.04)",
                           border: isMax
-                            ? "1px solid rgba(204,255,0,0.3)"
+                            ? "1px solid rgba(255,45,45,0.3)"
                             : "1px solid rgba(255,255,255,0.06)",
                         }}
                       >
                         <span
                           style={{
-                            color: isMax ? "#ccff00" : "rgba(255,255,255,0.7)",
+                            color: isMax ? "#ff2d2d" : "rgba(255,255,255,0.7)",
                           }}
                         >
                           {set.weight}

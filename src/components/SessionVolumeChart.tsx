@@ -33,12 +33,12 @@ function CustomTooltip({
       className="px-3 py-2 rounded-lg font-mono text-xs"
       style={{
         background: "rgba(0,0,0,0.85)",
-        border: "1px solid rgba(204,255,0,0.3)",
+        border: "1px solid rgba(255,45,45,0.3)",
       }}
     >
       <span className="text-white/70">{item.name}</span>
       <br />
-      <span style={{ color: "#ccff00" }}>{formatNum(item.volume)} lb</span>
+      <span style={{ color: "#ff2d2d" }}>{formatNum(item.volume)} lb</span>
     </div>
   );
 }
@@ -65,7 +65,7 @@ export default function SessionVolumeChart({ data }: SessionVolumeChartProps) {
         />
         <Bar
           dataKey="volume"
-          fill="rgba(204,255,0,0.7)"
+          fill="rgba(255,45,45,0.7)"
           radius={[4, 4, 0, 0]}
         />
       </BarChart>

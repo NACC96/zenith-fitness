@@ -20,7 +20,7 @@ export default function GlassCard({
   const [hovered, setHovered] = useState(false);
 
   const borderColor =
-    hover && hovered ? "rgba(204,255,0,0.4)" : "rgba(255,255,255,0.1)";
+    hover && hovered ? "rgba(255,45,45,0.4)" : "rgba(255,255,255,0.1)";
 
   return (
     <div

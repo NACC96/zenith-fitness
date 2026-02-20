@@ -91,7 +91,7 @@ export default function AddTypeModal({ isOpen, onClose }: AddTypeModalProps) {
                   fontSize: "14px",
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(204,255,0,0.4)";
+                  e.currentTarget.style.borderColor = "rgba(255,45,45,0.4)";
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
@@ -102,10 +102,10 @@ export default function AddTypeModal({ isOpen, onClose }: AddTypeModalProps) {
                 disabled={!customName.trim()}
                 className="shrink-0 px-5 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                 style={{
-                  background: "#ccff00",
+                  background: "#ff2d2d",
                   color: "#000",
                   boxShadow: customName.trim()
-                    ? "0 0 16px rgba(204,255,0,0.25)"
+                    ? "0 0 16px rgba(255,45,45,0.25)"
                     : "none",
                 }}
               >

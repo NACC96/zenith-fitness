@@ -28,7 +28,7 @@ export default function FilterPills({
             onClick={() => onFilterChange(type)}
             className={`shrink-0 rounded-full px-4 py-1.5 font-sans text-[13px] font-medium transition-all ${
               isActive
-                ? "bg-lime text-black shadow-[0_0_12px_rgba(204,255,0,0.4)]"
+                ? "bg-lime text-black shadow-[0_0_12px_rgba(255,45,45,0.4)]"
                 : "bg-transparent text-white/50 hover:text-white/70"
             }`}
           >
