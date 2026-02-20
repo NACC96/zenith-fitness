@@ -24,4 +24,16 @@ export default defineSchema({
       })
     ),
   }).index("by_session", ["sessionId"]),
+
+  chatMessages: defineTable({
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    model: v.optional(v.string()),
+    timestamp: v.number(),
+  }).index("by_timestamp", ["timestamp"]),
+
+  settings: defineTable({
+    key: v.string(),
+    value: v.string(),
+  }).index("by_key", ["key"]),
 });

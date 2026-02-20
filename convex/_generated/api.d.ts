@@ -8,8 +8,11 @@
  * @module
  */
 
+import type * as ai from "../ai.js";
+import type * as chatMessages from "../chatMessages.js";
 import type * as exercises from "../exercises.js";
 import type * as init from "../init.js";
+import type * as settings from "../settings.js";
 import type * as workoutSessions from "../workoutSessions.js";
 import type * as workoutTypes from "../workoutTypes.js";
 
@@ -20,8 +23,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ai: typeof ai;
+  chatMessages: typeof chatMessages;
   exercises: typeof exercises;
   init: typeof init;
+  settings: typeof settings;
   workoutSessions: typeof workoutSessions;
   workoutTypes: typeof workoutTypes;
 }>;
