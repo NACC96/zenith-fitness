@@ -13,6 +13,7 @@ import SessionDetail from "@/components/SessionDetail";
 import AddTypeModal from "@/components/AddTypeModal";
 import ChatDrawer from "@/components/ChatDrawer";
 import ChatToggleButton from "@/components/ChatToggleButton";
+import Portal from "@/components/Portal";
 
 export default function DashboardPage() {
   const [activeFilter, setActiveFilter] = useState<string>("All");
@@ -148,20 +149,22 @@ export default function DashboardPage() {
         onClose={() => setAddModalOpen(false)}
       />
 
-      <ChatToggleButton
-        isOpen={isChatOpen}
-        onClick={() => setIsChatOpen((o) => !o)}
-      />
-      <ChatDrawer
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        messages={chatMessages}
-        onSendMessage={handleSendMessage}
-        isLoading={isChatLoading}
-        selectedModel={selectedModel}
-        onModelChange={handleModelChange}
-        onClearChat={handleClearChat}
-      />
+      <Portal>
+        <ChatToggleButton
+          isOpen={isChatOpen}
+          onClick={() => setIsChatOpen((o) => !o)}
+        />
+        <ChatDrawer
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          messages={chatMessages}
+          onSendMessage={handleSendMessage}
+          isLoading={isChatLoading}
+          selectedModel={selectedModel}
+          onModelChange={handleModelChange}
+          onClearChat={handleClearChat}
+        />
+      </Portal>
     </div>
   );
 }
