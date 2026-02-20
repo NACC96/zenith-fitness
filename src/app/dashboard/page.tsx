@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { WorkoutType, WorkoutSession } from "@/lib/types";
-import { WORKOUT_DATA } from "@/lib/data";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { WorkoutSession } from "@/lib/types";
 import Header from "@/components/Header";
 import StatsRow from "@/components/StatsRow";
 import VolumeTrendChart from "@/components/VolumeTrendChart";
@@ -12,19 +13,51 @@ import SessionDetail from "@/components/SessionDetail";
 import AddTypeModal from "@/components/AddTypeModal";
 
 export default function DashboardPage() {
-  const [activeFilter, setActiveFilter] = useState<WorkoutType>("All");
+  const [activeFilter, setActiveFilter] = useState<string>("All");
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const rawWorkouts = useQuery(api.workoutSessions.listAll);
+  const workoutTypes = useQuery(api.workoutTypes.list);
+  const allWorkouts = (rawWorkouts ?? []) as WorkoutSession[];
+
+  const filterOptions = ["All", ...(workoutTypes?.map((t) => t.name) ?? [])];
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  if (rawWorkouts === undefined || workoutTypes === undefined) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div
+          className="rounded-2xl px-8 py-6 flex items-center gap-3"
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
+          <div
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{ background: "#ccff00" }}
+          />
+          <span
+            className="font-mono text-[11px] uppercase tracking-widest"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+          >
+            Loading workouts…
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const filteredSessions =
     activeFilter === "All"
-      ? WORKOUT_DATA
-      : WORKOUT_DATA.filter((w) => w.type === activeFilter);
+      ? allWorkouts
+      : allWorkouts.filter((w) => w.type === activeFilter);
 
   return (
     <div
@@ -34,7 +67,11 @@ export default function DashboardPage() {
         transition: "opacity 0.8s ease, transform 0.8s ease",
       }}
     >
-      <Header activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+      <Header
+        types={filterOptions}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+      />
 
       <main className="px-5 py-6 md:px-10 md:py-8">
         {/* Filter summary */}
@@ -45,7 +82,7 @@ export default function DashboardPage() {
         </p>
 
         {/* Stats row */}
-        <StatsRow workouts={WORKOUT_DATA} activeFilter={activeFilter} />
+        <StatsRow workouts={allWorkouts} activeFilter={activeFilter} />
 
         {/* Charts row */}
         <div className="mt-6 flex flex-col gap-4 md:flex-row">
@@ -63,7 +100,7 @@ export default function DashboardPage() {
           />
           <SessionDetail
             workout={selectedSession}
-            allWorkouts={WORKOUT_DATA}
+            allWorkouts={allWorkouts}
           />
         </div>
       </main>

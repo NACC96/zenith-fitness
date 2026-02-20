@@ -1,14 +1,14 @@
 "use client";
 
-import type { WorkoutType } from "@/lib/types";
 import FilterPills from "./FilterPills";
 
 interface HeaderProps {
-  activeFilter: WorkoutType;
-  onFilterChange: (filter: WorkoutType) => void;
+  types: string[];
+  activeFilter: string;
+  onFilterChange: (filter: string) => void;
 }
 
-export default function Header({ activeFilter, onFilterChange }: HeaderProps) {
+export default function Header({ types, activeFilter, onFilterChange }: HeaderProps) {
   return (
     <header
       className="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-10 md:py-6"
@@ -39,6 +39,7 @@ export default function Header({ activeFilter, onFilterChange }: HeaderProps) {
 
       {/* Center: Filter Pills */}
       <FilterPills
+        types={types}
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
       />

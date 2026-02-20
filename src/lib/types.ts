@@ -1,4 +1,4 @@
-export type WorkoutType = "All" | "Chest" | "Back" | "Legs" | "Shoulders" | "Arms";
+export type WorkoutType = string;
 
 export interface WorkoutSet {
   weight: number; // lbs
@@ -12,7 +12,10 @@ export interface Exercise {
 
 export interface WorkoutSession {
   id: string;
+  _id?: string;
+  _creationTime?: number;
   date: string; // ISO date string (YYYY-MM-DD)
   type: Exclude<WorkoutType, "All">;
+  label?: string;
   exercises: Exercise[];
 }

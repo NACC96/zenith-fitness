@@ -1,14 +1,13 @@
 "use client";
 
-import type { WorkoutType } from "@/lib/types";
-import { WORKOUT_TYPES } from "@/lib/constants";
-
 interface FilterPillsProps {
-  activeFilter: WorkoutType;
-  onFilterChange: (filter: WorkoutType) => void;
+  types: string[];
+  activeFilter: string;
+  onFilterChange: (filter: string) => void;
 }
 
 export default function FilterPills({
+  types,
   activeFilter,
   onFilterChange,
 }: FilterPillsProps) {
@@ -21,7 +20,7 @@ export default function FilterPills({
         border: "1px solid rgba(255, 255, 255, 0.06)",
       }}
     >
-      {WORKOUT_TYPES.map((type) => {
+      {types.map((type) => {
         const isActive = type === activeFilter;
         return (
           <button

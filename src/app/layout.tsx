@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { ConvexClientProvider } from "./ConvexClientProvider";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -35,7 +36,9 @@ export default function RootLayout({
 
         {/* Floating shell */}
         <div className="shell">
-          {children}
+          <ConvexClientProvider>
+            {children}
+          </ConvexClientProvider>
         </div>
       </body>
     </html>
