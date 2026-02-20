@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import type { WorkoutSession } from "@/lib/types";
 import Header from "@/components/Header";
 import StatsRow from "@/components/StatsRow";
@@ -23,22 +24,40 @@ export default function DashboardPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("google/gemini-3.1-pro-preview");
   const [modelInitialized, setModelInitialized] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<Id<"chatSessions"> | null>(null);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const rawWorkouts = useQuery(api.workoutSessions.listAll);
   const workoutTypes = useQuery(api.workoutTypes.list);
   const allWorkouts = (rawWorkouts ?? []) as WorkoutSession[];
 
+  // Chat sessions
+  const sessions = useQuery(api.chatSessions.list) ?? [];
+  const createSession = useMutation(api.chatSessions.create);
+  const deleteSession = useMutation(api.chatSessions.remove);
+
   // Chat: Convex queries and mutations
-  const chatMessages = useQuery(api.chatMessages.list) ?? [];
+  const chatMessages = useQuery(
+    api.chatMessages.list,
+    activeSessionId ? { sessionId: activeSessionId } : "skip"
+  ) ?? [];
   const sendMessage = useMutation(api.chatMessages.send);
   const clearChat = useMutation(api.chatMessages.clear);
   const savedModel = useQuery(api.settings.get, { key: "selectedModel" });
   const saveModel = useMutation(api.settings.set);
 
-  // Loading state: true when the last message is from user (waiting for AI response)
-  const isChatLoading =
-    chatMessages.length > 0 &&
-    chatMessages[chatMessages.length - 1].role === "user";
+  // Streaming replaces the old "last message is user" loading check
+  const isChatLoading = isStreaming;
+
+  // Auto-create or select first session on load
+  useEffect(() => {
+    if (sessions.length === 0 && activeSessionId === null) {
+      createSession().then((id) => setActiveSessionId(id));
+    } else if (activeSessionId === null && sessions.length > 0) {
+      setActiveSessionId(sessions[0]._id);
+    }
+  }, [sessions, activeSessionId, createSession]);
 
   const filterOptions = ["All", ...(workoutTypes?.map((t) => t.name) ?? [])];
 
@@ -51,7 +70,84 @@ export default function DashboardPage() {
   }, [savedModel, modelInitialized]);
 
   const handleSendMessage = async (content: string) => {
-    await sendMessage({ content, model: selectedModel });
+    if (!activeSessionId || isStreaming) return;
+
+    // 1. Save user message to DB via mutation
+    await sendMessage({ sessionId: activeSessionId, content, model: selectedModel });
+
+    // 2. Build message history from recent messages
+    const recentMessages = chatMessages.slice(-20).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // 3. Start streaming
+    setIsStreaming(true);
+    setStreamingContent("");
+
+    try {
+      const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+      const baseUrl =
+        siteUrl ||
+        (process.env.NEXT_PUBLIC_CONVEX_URL?.replace(".cloud", ".site") ?? "");
+
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: activeSessionId,
+          content,
+          model: selectedModel,
+          messageHistory: recentMessages,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+
+          try {
+            const parsed = JSON.parse(data);
+
+            if (parsed.token) {
+              accumulated += parsed.token;
+              setStreamingContent(accumulated);
+            } else if (parsed.done) {
+              break;
+            } else if (parsed.error) {
+              console.error("Stream error:", parsed.error);
+              break;
+            }
+            // parsed.thinking — AI is processing tools, streaming continues
+          } catch {
+            // Skip unparseable lines
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Streaming failed:", error);
+    } finally {
+      setIsStreaming(false);
+      setStreamingContent("");
+    }
   };
 
   const handleModelChange = (model: string) => {
@@ -60,7 +156,26 @@ export default function DashboardPage() {
   };
 
   const handleClearChat = async () => {
-    await clearChat();
+    if (!activeSessionId) return;
+    await clearChat({ sessionId: activeSessionId });
+  };
+
+  const handleNewChat = async () => {
+    const id = await createSession();
+    setActiveSessionId(id);
+  };
+
+  const handleDeleteSession = async (sessionId: Id<"chatSessions">) => {
+    await deleteSession({ sessionId });
+    if (activeSessionId === sessionId) {
+      const remaining = sessions.filter((s) => s._id !== sessionId);
+      if (remaining.length > 0) {
+        setActiveSessionId(remaining[0]._id);
+      } else {
+        const id = await createSession();
+        setActiveSessionId(id);
+      }
+    }
   };
 
   useEffect(() => {
@@ -163,6 +278,13 @@ export default function DashboardPage() {
           selectedModel={selectedModel}
           onModelChange={handleModelChange}
           onClearChat={handleClearChat}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={(id: string) => setActiveSessionId(id as Id<"chatSessions">)}
+          onNewChat={handleNewChat}
+          onDeleteSession={(id: string) => handleDeleteSession(id as Id<"chatSessions">)}
+          streamingContent={streamingContent}
+          isStreaming={isStreaming}
         />
       </Portal>
     </div>

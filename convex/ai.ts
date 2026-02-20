@@ -1,8 +1,6 @@
-"use node";
-
-import { internalAction } from "./_generated/server";
-import { v } from "convex/values";
+import { httpAction } from "./_generated/server";
 import { internal, api } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 const SYSTEM_PROMPT = `You are Zenith AI, a workout tracking assistant. You help users log workouts and analyze their training history.
 
@@ -116,144 +114,248 @@ const TOOLS = [
   },
 ];
 
-export const chat = internalAction({
-  args: {
-    userMessage: v.string(),
-    model: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) throw new Error("OPENROUTER_API_KEY not set");
+const encoder = new TextEncoder();
 
-    // Get recent messages for context (last 20)
-    const recentMessages = await ctx.runQuery(api.chatMessages.list);
-    const messageHistory = recentMessages.slice(-20).map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+function sseHeaders() {
+  return {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
 
-    // Build request
-    const messages: any[] = [
-      { role: "system" as const, content: SYSTEM_PROMPT },
-      ...messageHistory,
-    ];
+export const streamChat = httpAction(async (ctx, request) => {
+  const { sessionId, content, model, messageHistory } = await request.json();
 
-    // Reasoning config — some models have mandatory reasoning, others use effort param
-    const mandatoryReasoningModels = [
-      "google/gemini-3.1-pro-preview",
-      "minimax/minimax-m2.5",
-    ];
-    const reasoning = mandatoryReasoningModels.includes(args.model)
-      ? undefined // these models reason by default
-      : { effort: "high" as const };
+  const messages: any[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...(messageHistory || []),
+    { role: "user", content },
+  ];
 
-    let attempts = 0;
-    const maxAttempts = 5; // max tool call rounds
+  const mandatoryReasoningModels = [
+    "google/gemini-3.1-pro-preview",
+    "minimax/minimax-m2.5",
+  ];
+  const reasoning = mandatoryReasoningModels.includes(model)
+    ? undefined
+    : { effort: "high" as const };
 
-    while (attempts < maxAttempts) {
-      attempts++;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    return new Response(
+      `data: ${JSON.stringify({ error: "OpenRouter API key not configured" })}\n\n`,
+      { headers: sseHeaders() }
+    );
+  }
 
-      const body: Record<string, unknown> = {
-        model: args.model,
-        messages,
-        tools: TOOLS,
-        tool_choice: "auto",
-      };
-      if (reasoning) body.reasoning = reasoning;
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        let fullResponse = "";
+        let currentMessages = [...messages];
+        const maxAttempts = 5;
+        let attempt = 0;
 
-      const response = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://zenith-fitness.vercel.app",
-            "X-Title": "Zenith Fitness",
-          },
-          body: JSON.stringify(body),
-        }
-      );
+        while (attempt < maxAttempts) {
+          attempt++;
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error("OpenRouter error:", error);
-        await ctx.runMutation(internal.chatMessages.saveAssistantMessage, {
-          content: `Sorry, I encountered an error: ${response.status}. Please try again.`,
-          model: args.model,
-        });
-        return;
-      }
+          const body: Record<string, unknown> = {
+            model,
+            messages: currentMessages,
+            tools: TOOLS,
+            tool_choice: "auto",
+            stream: true,
+          };
+          if (reasoning) body.reasoning = reasoning;
 
-      const data = await response.json();
-      const choice = data.choices?.[0];
-      if (!choice) {
-        await ctx.runMutation(internal.chatMessages.saveAssistantMessage, {
-          content: "Sorry, I didn't get a response. Please try again.",
-          model: args.model,
-        });
-        return;
-      }
+          const response = await fetch(
+            "https://openrouter.ai/api/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://zenith-fitness.vercel.app",
+                "X-Title": "Zenith Fitness",
+              },
+              body: JSON.stringify(body),
+            }
+          );
 
-      const message = choice.message;
-
-      // If no tool calls, we have the final response
-      if (!message.tool_calls || message.tool_calls.length === 0) {
-        const content =
-          message.content || "I'm not sure how to respond to that.";
-        await ctx.runMutation(internal.chatMessages.saveAssistantMessage, {
-          content,
-          model: args.model,
-        });
-        return;
-      }
-
-      // Process tool calls
-      messages.push(message); // add assistant's tool call message
-
-      for (const toolCall of message.tool_calls) {
-        const name = toolCall.function.name;
-        const toolArgs = JSON.parse(toolCall.function.arguments);
-        let result: string;
-
-        try {
-          if (name === "logExercise") {
-            result = await handleLogExercise(ctx, toolArgs);
-          } else if (name === "getWorkoutHistory") {
-            result = await handleGetHistory(ctx, toolArgs);
-          } else if (name === "getExerciseStats") {
-            result = await handleGetStats(ctx, toolArgs);
-          } else if (name === "createWorkoutType") {
-            result = await handleCreateType(ctx, toolArgs);
-          } else {
-            result = JSON.stringify({ error: `Unknown tool: ${name}` });
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error("OpenRouter error:", errorText);
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ error: `API error: ${response.status}` })}\n\n`
+              )
+            );
+            controller.close();
+            return;
           }
-        } catch (e: unknown) {
-          const errorMessage = e instanceof Error ? e.message : String(e);
-          result = JSON.stringify({ error: errorMessage });
+
+          const reader = response.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let streamedContent = "";
+          const toolCalls: any[] = [];
+          let hasToolCalls = false;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const data = line.slice(6).trim();
+              if (data === "[DONE]") continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
+                if (!delta) continue;
+
+                if (delta.content) {
+                  streamedContent += delta.content;
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ token: delta.content })}\n\n`
+                    )
+                  );
+                }
+
+                if (delta.tool_calls) {
+                  hasToolCalls = true;
+                  for (const tc of delta.tool_calls) {
+                    const idx = tc.index;
+                    if (!toolCalls[idx]) {
+                      toolCalls[idx] = {
+                        id: tc.id || "",
+                        type: "function",
+                        function: { name: tc.function?.name || "", arguments: "" },
+                      };
+                    }
+                    if (tc.id) toolCalls[idx].id = tc.id;
+                    if (tc.function?.name)
+                      toolCalls[idx].function.name = tc.function.name;
+                    if (tc.function?.arguments)
+                      toolCalls[idx].function.arguments +=
+                        tc.function.arguments;
+                  }
+                }
+              } catch {
+                // Skip unparseable lines
+              }
+            }
+          }
+
+          if (hasToolCalls && toolCalls.length > 0) {
+            currentMessages.push({
+              role: "assistant",
+              content: streamedContent || null,
+              tool_calls: toolCalls,
+            });
+
+            for (const tc of toolCalls) {
+              const toolName = tc.function.name;
+              let toolArgs;
+              try {
+                toolArgs = JSON.parse(tc.function.arguments);
+              } catch {
+                toolArgs = {};
+              }
+
+              let result: string;
+              try {
+                if (toolName === "logExercise") {
+                  result = await handleLogExercise(ctx, toolArgs);
+                } else if (toolName === "getWorkoutHistory") {
+                  result = await handleGetHistory(ctx, toolArgs);
+                } else if (toolName === "getExerciseStats") {
+                  result = await handleGetStats(ctx, toolArgs);
+                } else if (toolName === "createWorkoutType") {
+                  result = await handleCreateType(ctx, toolArgs);
+                } else {
+                  result = JSON.stringify({ error: `Unknown tool: ${toolName}` });
+                }
+              } catch (e: unknown) {
+                const errorMessage = e instanceof Error ? e.message : String(e);
+                result = JSON.stringify({ error: errorMessage });
+              }
+
+              currentMessages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: result,
+              });
+            }
+
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ thinking: true })}\n\n`
+              )
+            );
+            continue;
+          }
+
+          fullResponse = streamedContent;
+          break;
         }
 
-        messages.push({
-          role: "tool" as const,
-          tool_call_id: toolCall.id,
-          content: result,
+        // Save assistant message to DB
+        await ctx.runMutation(internal.chatMessages.saveAssistantMessage, {
+          sessionId: sessionId as Id<"chatSessions">,
+          content: fullResponse || "I wasn't able to generate a response.",
+          model,
         });
-      }
-      // Loop back to let AI process tool results
-    }
 
-    // If we exhausted attempts
-    await ctx.runMutation(internal.chatMessages.saveAssistantMessage, {
-      content:
-        "I processed your request but ran into complexity. Here's what I was able to do — check the dashboard for any updates.",
-      model: args.model,
-    });
-  },
+        // Auto-title: if session title is "New Chat", generate one from user message
+        try {
+          const session = await ctx.runQuery(api.chatSessions.get, {
+            sessionId: sessionId as Id<"chatSessions">,
+          });
+          if (session && session.title === "New Chat") {
+            const title =
+              content.length > 40 ? content.slice(0, 40) + "..." : content;
+            await ctx.runMutation(api.chatSessions.updateTitle, {
+              sessionId: sessionId as Id<"chatSessions">,
+              title,
+            });
+          }
+        } catch {
+          // Auto-titling is best-effort
+        }
+
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`)
+        );
+        controller.close();
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ error: errorMessage })}\n\n`
+          )
+        );
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, { headers: sseHeaders() });
 });
 
 // Tool handler implementations
 async function handleLogExercise(ctx: any, args: any): Promise<string> {
-  // Find or create session for this date/type
   const sessions = await ctx.runQuery(api.workoutSessions.listAll);
   const session = sessions.find(
     (s: any) => s.date === args.date && s.type === args.type
@@ -261,19 +363,16 @@ async function handleLogExercise(ctx: any, args: any): Promise<string> {
 
   let sessionId;
   if (!session) {
-    // Create session
     sessionId = await ctx.runMutation(api.workoutSessions.create, {
       type: args.type,
       date: args.date,
       label: args.label,
     });
-    // Also ensure the workout type exists
     await ctx.runMutation(api.workoutTypes.create, { name: args.type });
   } else {
     sessionId = session._id;
   }
 
-  // Add the exercise
   await ctx.runMutation(api.exercises.add, {
     sessionId,
     name: args.exerciseName,
@@ -346,7 +445,6 @@ async function handleGetStats(ctx: any, args: any): Promise<string> {
           (sum: number, s: any) => sum + s.weight * s.reps,
           0
         );
-        // Estimated 1RM (Brzycki formula)
         const est1RM =
           maxReps === 1
             ? maxWeight

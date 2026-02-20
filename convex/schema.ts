@@ -25,12 +25,19 @@ export default defineSchema({
     ),
   }).index("by_session", ["sessionId"]),
 
+  chatSessions: defineTable({
+    title: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_updatedAt", ["updatedAt"]),
+
   chatMessages: defineTable({
+    sessionId: v.id("chatSessions"),
     role: v.union(v.literal("user"), v.literal("assistant")),
     content: v.string(),
     model: v.optional(v.string()),
     timestamp: v.number(),
-  }).index("by_timestamp", ["timestamp"]),
+  }).index("by_session", ["sessionId", "timestamp"]),
 
   settings: defineTable({
     key: v.string(),

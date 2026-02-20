@@ -1,62 +1,65 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 
-// List recent chat messages (most recent 50)
+// List chat messages for a session
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sessionId: v.id("chatSessions") },
+  handler: async (ctx, args) => {
     return await ctx.db
       .query("chatMessages")
-      .withIndex("by_timestamp")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .order("asc")
-      .take(50);
+      .take(100);
   },
 });
 
-// User sends a message — saves it and schedules AI response
+// User sends a message
 export const send = mutation({
   args: {
+    sessionId: v.id("chatSessions"),
     content: v.string(),
     model: v.string(),
   },
   handler: async (ctx, args) => {
-    // Save user message
     await ctx.db.insert("chatMessages", {
+      sessionId: args.sessionId,
       role: "user",
       content: args.content,
       timestamp: Date.now(),
     });
-
-    // Schedule the AI action (runs asynchronously)
-    await ctx.scheduler.runAfter(0, internal.ai.chat, {
-      userMessage: args.content,
-      model: args.model,
-    });
+    // Update session's updatedAt
+    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    // NOTE: Do NOT schedule ai.chat here anymore — streaming will handle AI calls from the client side
   },
 });
 
 // Internal mutation for AI to save its response
 export const saveAssistantMessage = internalMutation({
   args: {
+    sessionId: v.id("chatSessions"),
     content: v.string(),
-    model: v.string(),
+    model: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("chatMessages", {
+      sessionId: args.sessionId,
       role: "assistant",
       content: args.content,
       model: args.model,
       timestamp: Date.now(),
     });
+    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
   },
 });
 
-// Clear all chat messages
+// Clear all messages in a session
 export const clear = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const messages = await ctx.db.query("chatMessages").collect();
+  args: { sessionId: v.id("chatSessions") },
+  handler: async (ctx, args) => {
+    const messages = await ctx.db
+      .query("chatMessages")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
     for (const msg of messages) {
       await ctx.db.delete(msg._id);
     }

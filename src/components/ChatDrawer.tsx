@@ -10,6 +10,13 @@ interface ChatMessage {
   timestamp: number;
 }
 
+interface ChatSession {
+  _id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface ChatDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,6 +26,13 @@ interface ChatDrawerProps {
   selectedModel: string;
   onModelChange: (model: string) => void;
   onClearChat: () => void;
+  sessions: ChatSession[];
+  activeSessionId: string | null;
+  onSelectSession: (id: string) => void;
+  onNewChat: () => void;
+  onDeleteSession: (id: string) => void;
+  streamingContent: string;
+  isStreaming: boolean;
 }
 
 const MODELS = [
@@ -37,6 +51,19 @@ function getModelLabel(value: string): string {
 function formatTime(ts: number): string {
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatRelativeDate(timestamp: number): string {
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffDays = Math.floor(
+    (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function renderMarkdown(text: string): string {
@@ -75,21 +102,35 @@ export default function ChatDrawer({
   selectedModel,
   onModelChange,
   onClearChat,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onNewChat,
+  onDeleteSession,
+  streamingContent,
+  isStreaming,
 }: ChatDrawerProps) {
   const [input, setInput] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages and streaming
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, streamingContent]);
 
   // Focus input when drawer opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => textareaRef.current?.focus(), 300);
     }
+  }, [isOpen]);
+
+  // Close sidebar when drawer closes
+  useEffect(() => {
+    if (!isOpen) setIsSidebarOpen(false);
   }, [isOpen]);
 
   const handleSend = () => {
@@ -118,6 +159,16 @@ export default function ChatDrawer({
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   };
 
+  const handleSelectSession = (id: string) => {
+    onSelectSession(id);
+    setIsSidebarOpen(false);
+  };
+
+  const handleNewChat = () => {
+    onNewChat();
+    setIsSidebarOpen(false);
+  };
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -142,9 +193,40 @@ export default function ChatDrawer({
       >
         {/* Header */}
         <div
-          className="flex items-center gap-3 px-5 py-4 shrink-0"
+          className="flex items-center gap-3 px-5 py-4 shrink-0 relative z-20"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
+          {/* History/sidebar toggle */}
+          <button
+            onClick={() => setIsSidebarOpen((o) => !o)}
+            className="p-2 rounded-lg cursor-pointer transition-colors"
+            style={{ color: isSidebarOpen ? "#ff2d2d" : "rgba(255,255,255,0.4)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#ff2d2d";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = isSidebarOpen
+                ? "#ff2d2d"
+                : "rgba(255,255,255,0.4)";
+            }}
+            title="Chat history"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+
           {/* Title + pulse dot */}
           <div className="flex items-center gap-2 mr-auto">
             <div
@@ -231,93 +313,301 @@ export default function ChatDrawer({
           </button>
         </div>
 
-        {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {messages.length === 0 && !isLoading && (
-            <div className="flex flex-col items-center justify-center h-full gap-4">
-              {/* Brain icon */}
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.15)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        {/* Content area: sidebar + messages */}
+        <div className="flex-1 relative overflow-hidden">
+          {/* Session sidebar */}
+          <div
+            className="absolute top-0 left-0 bottom-0 z-10 flex flex-col w-full md:w-[220px]"
+            style={{
+              background: "rgba(10, 10, 10, 0.98)",
+              backdropFilter: "blur(24px)",
+              borderRight: "1px solid rgba(255,45,45,0.1)",
+              transform: isSidebarOpen ? "translateX(0)" : "translateX(-100%)",
+              transition: "transform 300ms ease",
+            }}
+          >
+            {/* Mobile back button */}
+            <div className="flex items-center gap-2 px-3 py-3 md:hidden"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 rounded-lg cursor-pointer transition-colors"
+                style={{ color: "rgba(255,255,255,0.5)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#ff2d2d"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.5)"; }}
               >
-                <path d="M12 2a7 7 0 0 0-7 7c0 3 1.5 5.5 4 7v3h6v-3c2.5-1.5 4-4 4-7a7 7 0 0 0-7-7z" />
-                <path d="M9 22h6" />
-                <path d="M10 19h4" />
-              </svg>
-              <p
-                className="text-center leading-relaxed"
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <span
                 style={{
-                  color: "rgba(255,255,255,0.3)",
-                  fontFamily: "var(--font-sans)",
-                  fontSize: "14px",
-                  maxWidth: "240px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  color: "rgba(255,255,255,0.4)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
                 }}
               >
-                Ask me to log a workout or check your stats...
-              </p>
-              {/* Suggestion chips */}
-              <div className="flex flex-wrap justify-center gap-2 mt-1">
-                {["Log bench press", "Show my progress", "What's my PR?"].map(
-                  (chip) => (
-                    <button
-                      key={chip}
-                      onClick={() => onSendMessage(chip)}
-                      className="px-3 py-1.5 rounded-full text-xs cursor-pointer transition-all"
+                History
+              </span>
+            </div>
+
+            {/* New Chat button */}
+            <div className="px-3 py-3">
+              <button
+                onClick={handleNewChat}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-all"
+                style={{
+                  background: "rgba(255,45,45,0.06)",
+                  border: "1px solid rgba(255,45,45,0.2)",
+                  color: "#ff2d2d",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "12px",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,45,45,0.12)";
+                  e.currentTarget.style.borderColor = "rgba(255,45,45,0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,45,45,0.06)";
+                  e.currentTarget.style.borderColor = "rgba(255,45,45,0.2)";
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                New Chat
+              </button>
+            </div>
+
+            {/* Session list */}
+            <div className="flex-1 overflow-y-auto px-2 pb-3">
+              {sessions.map((session) => {
+                const isActive = session._id === activeSessionId;
+                const isHovered = session._id === hoveredSessionId;
+                return (
+                  <button
+                    key={session._id}
+                    onClick={() => handleSelectSession(session._id)}
+                    onMouseEnter={() => setHoveredSessionId(session._id)}
+                    onMouseLeave={() => setHoveredSessionId(null)}
+                    className="w-full text-left px-3 py-2.5 rounded-lg cursor-pointer transition-all mb-0.5 relative group"
+                    style={{
+                      background: isActive
+                        ? "rgba(255,45,45,0.08)"
+                        : isHovered
+                          ? "rgba(255,255,255,0.04)"
+                          : "transparent",
+                      borderLeft: isActive
+                        ? "2px solid #ff2d2d"
+                        : "2px solid transparent",
+                    }}
+                  >
+                    <div
+                      className="truncate"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        color: "rgba(255,255,255,0.45)",
-                        fontFamily: "var(--font-sans)",
-                        fontSize: "12px",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor =
-                          "rgba(255,45,45,0.3)";
-                        e.currentTarget.style.color = "#ff2d2d";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor =
-                          "rgba(255,255,255,0.08)";
-                        e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "11px",
+                        color: isActive ? "#ebebeb" : "rgba(255,255,255,0.55)",
+                        lineHeight: "1.4",
                       }}
                     >
-                      {chip}
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-          )}
+                      {session.title}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        color: "rgba(255,255,255,0.25)",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {formatRelativeDate(session.updatedAt)}
+                    </div>
 
-          {messages.map((msg) => (
-            <div
-              key={msg._id}
-              className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
-            >
+                    {/* Delete button on hover */}
+                    {isHovered && sessions.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSession(session._id);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded cursor-pointer transition-colors"
+                        style={{ color: "rgba(255,255,255,0.3)" }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = "#ff2d2d";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = "rgba(255,255,255,0.3)";
+                        }}
+                        title="Delete chat"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
+                      </button>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Messages area */}
+          <div className="absolute inset-0 overflow-y-auto px-4 py-4 space-y-3">
+            {messages.length === 0 && !isLoading && (
+              <div className="flex flex-col items-center justify-center h-full gap-4">
+                {/* Brain icon */}
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.15)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a7 7 0 0 0-7 7c0 3 1.5 5.5 4 7v3h6v-3c2.5-1.5 4-4 4-7a7 7 0 0 0-7-7z" />
+                  <path d="M9 22h6" />
+                  <path d="M10 19h4" />
+                </svg>
+                <p
+                  className="text-center leading-relaxed"
+                  style={{
+                    color: "rgba(255,255,255,0.3)",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "14px",
+                    maxWidth: "240px",
+                  }}
+                >
+                  Ask me to log a workout or check your stats...
+                </p>
+                {/* Suggestion chips */}
+                <div className="flex flex-wrap justify-center gap-2 mt-1">
+                  {["Log bench press", "Show my progress", "What's my PR?"].map(
+                    (chip) => (
+                      <button
+                        key={chip}
+                        onClick={() => onSendMessage(chip)}
+                        className="px-3 py-1.5 rounded-full text-xs cursor-pointer transition-all"
+                        style={{
+                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          color: "rgba(255,255,255,0.45)",
+                          fontFamily: "var(--font-sans)",
+                          fontSize: "12px",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor =
+                            "rgba(255,45,45,0.3)";
+                          e.currentTarget.style.color = "#ff2d2d";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor =
+                            "rgba(255,255,255,0.08)";
+                          e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+                        }}
+                      >
+                        {chip}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg) => (
               <div
-                className="max-w-[85%] px-4 py-3"
-                style={{
-                  background:
-                    msg.role === "user"
-                      ? "rgba(255,45,45,0.08)"
-                      : "rgba(255,255,255,0.04)",
-                  border:
-                    msg.role === "user"
-                      ? "1px solid rgba(255,45,45,0.15)"
-                      : "1px solid rgba(255,255,255,0.06)",
-                  borderRadius:
-                    msg.role === "user"
-                      ? "1rem 1rem 0.375rem 1rem"
-                      : "1rem 1rem 1rem 0.375rem",
-                }}
+                key={msg._id}
+                className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
               >
-                {msg.role === "assistant" ? (
+                <div
+                  className="max-w-[85%] px-4 py-3"
+                  style={{
+                    background:
+                      msg.role === "user"
+                        ? "rgba(255,45,45,0.08)"
+                        : "rgba(255,255,255,0.04)",
+                    border:
+                      msg.role === "user"
+                        ? "1px solid rgba(255,45,45,0.15)"
+                        : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius:
+                      msg.role === "user"
+                        ? "1rem 1rem 0.375rem 1rem"
+                        : "1rem 1rem 1rem 0.375rem",
+                  }}
+                >
+                  {msg.role === "assistant" ? (
+                    <div
+                      className="text-sm leading-relaxed"
+                      style={{
+                        color: "rgba(255,255,255,0.8)",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: "14px",
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: renderMarkdown(msg.content),
+                      }}
+                    />
+                  ) : (
+                    <p
+                      className="text-sm leading-relaxed whitespace-pre-wrap"
+                      style={{
+                        color: "#ebebeb",
+                        fontFamily: "var(--font-sans)",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {msg.content}
+                    </p>
+                  )}
+                </div>
+
+                {/* Meta line: model badge + timestamp */}
+                <div
+                  className={`flex items-center gap-2 mt-1 px-1 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                >
+                  {msg.role === "assistant" && msg.model && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        color: "rgba(255,255,255,0.3)",
+                      }}
+                    >
+                      {getModelLabel(msg.model)}
+                    </span>
+                  )}
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "10px",
+                      color: "rgba(255,255,255,0.2)",
+                    }}
+                  >
+                    {formatTime(msg.timestamp)}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Streaming message — shows tokens as they arrive */}
+            {isStreaming && streamingContent && (
+              <div className="flex flex-col items-start">
+                <div
+                  className="max-w-[85%] px-4 py-3"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: "1rem 1rem 1rem 0.375rem",
+                  }}
+                >
                   <div
                     className="text-sm leading-relaxed"
                     style={{
@@ -326,75 +616,38 @@ export default function ChatDrawer({
                       fontSize: "14px",
                     }}
                     dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(msg.content),
+                      __html: renderMarkdown(streamingContent),
                     }}
                   />
-                ) : (
-                  <p
-                    className="text-sm leading-relaxed whitespace-pre-wrap"
-                    style={{
-                      color: "#ebebeb",
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "14px",
-                    }}
-                  >
-                    {msg.content}
-                  </p>
-                )}
+                </div>
               </div>
+            )}
 
-              {/* Meta line: model badge + timestamp */}
-              <div
-                className={`flex items-center gap-2 mt-1 px-1 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-              >
-                {msg.role === "assistant" && msg.model && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "10px",
-                      color: "rgba(255,255,255,0.3)",
-                    }}
-                  >
-                    {getModelLabel(msg.model)}
-                  </span>
-                )}
-                <span
+            {/* Thinking/loading indicator — when waiting or processing tools */}
+            {isStreaming && !streamingContent && (
+              <div className="flex items-start">
+                <div
+                  className="px-4 py-3 flex items-center gap-1.5"
                   style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "10px",
-                    color: "rgba(255,255,255,0.2)",
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: "1rem 1rem 1rem 0.375rem",
                   }}
                 >
-                  {formatTime(msg.timestamp)}
-                </span>
+                  <span className="chat-dot" style={{ animationDelay: "0ms" }} />
+                  <span className="chat-dot" style={{ animationDelay: "150ms" }} />
+                  <span className="chat-dot" style={{ animationDelay: "300ms" }} />
+                </div>
               </div>
-            </div>
-          ))}
+            )}
 
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="flex items-start">
-              <div
-                className="px-4 py-3 flex items-center gap-1.5"
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  borderRadius: "1rem 1rem 1rem 0.375rem",
-                }}
-              >
-                <span className="chat-dot" style={{ animationDelay: "0ms" }} />
-                <span className="chat-dot" style={{ animationDelay: "150ms" }} />
-                <span className="chat-dot" style={{ animationDelay: "300ms" }} />
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Input area */}
         <div
-          className="shrink-0 px-4 py-3"
+          className="shrink-0 px-4 py-3 relative z-20"
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
         >
           <div className="flex items-end gap-2">
