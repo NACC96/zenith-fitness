@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import ActiveExerciseFeed from "@/components/ActiveExerciseFeed";
 
 const MODELS = [
   { label: "Gemini 3.1 Pro", value: "google/gemini-3.1-pro-preview" },
@@ -13,40 +17,128 @@ const MODELS = [
   { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
 ];
 
+type ChatMessage = { id: string; role: "user" | "assistant"; content: string };
+type TimedSet = {
+  weight: number;
+  reps: number;
+  startedAt?: number;
+  endedAt?: number;
+  restStartedAt?: number;
+  restEndedAt?: number;
+};
+
+type ExerciseDoc = {
+  _id: Id<"exercises">;
+  name: string;
+  sets: TimedSet[];
+};
+
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function formatDuration(ms: number): string {
+  const clamped = Math.max(0, ms);
+  return formatTimer(Math.floor(clamped / 1000));
+}
+
+function getLastRestDurationMs(exercises: ExerciseDoc[]): number | null {
+  let latestRestStartedAt = -1;
+  let latestRestDuration: number | null = null;
+
+  for (const exercise of exercises) {
+    for (const set of exercise.sets) {
+      if (set.restStartedAt === undefined || set.restEndedAt === undefined) continue;
+      if (set.restStartedAt > latestRestStartedAt) {
+        latestRestStartedAt = set.restStartedAt;
+        latestRestDuration = Math.max(0, set.restEndedAt - set.restStartedAt);
+      }
+    }
+  }
+
+  return latestRestDuration;
+}
+
+function mapFeedExercises(exercises: ExerciseDoc[]) {
+  return exercises.map((exercise) => ({
+    name: exercise.name,
+    sets: exercise.sets.map((set, index) => ({
+      setNumber: index + 1,
+      ...set,
+    })),
+  }));
+}
+
 export default function WorkoutPage() {
   const router = useRouter();
-  const [elapsed, setElapsed] = useState(0);
-  const [messages] = useState<{ id: string; role: "user" | "assistant"; content: string }[]>([]);
+  const [messages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming] = useState(false);
   const [streamingContent] = useState("");
   const [selectedModel, setSelectedModel] = useState("google/gemini-3.1-pro-preview");
+  const [exerciseName, setExerciseName] = useState("");
+  const [weight, setWeight] = useState("");
+  const [reps, setReps] = useState("");
+  const [isStartingSet, setIsStartingSet] = useState(false);
+  const [isCompletingSet, setIsCompletingSet] = useState(false);
+  const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
+  const [shouldAutoCreateSession, setShouldAutoCreateSession] = useState(true);
+  const [requestingSession, setRequestingSession] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Timer counting up from mount
+  const activeSession = useQuery(api.workoutSessions.getActive);
+  const createActiveSession = useMutation(api.workoutSessions.createActive);
+  const finishActiveSession = useMutation(api.workoutSessions.finishActive);
+  const startSet = useMutation(api.exercises.startSet);
+  const completeSet = useMutation(api.exercises.completeSet);
+  const exercisesRaw = useQuery(
+    api.exercises.listBySession,
+    activeSession ? { sessionId: activeSession._id } : "skip",
+  );
+  const liveTiming = useQuery(
+    api.workoutSessions.getLiveTimingState,
+    activeSession ? { sessionId: activeSession._id } : "skip",
+  );
+
+  const exercises = (exercisesRaw ?? []) as ExerciseDoc[];
+
   useEffect(() => {
     const interval = setInterval(() => {
-      setElapsed((prev) => prev + 1);
+      setNowMs(Date.now());
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
 
+  useEffect(() => {
+    if (!shouldAutoCreateSession || activeSession !== null || requestingSession) return;
+
+    setRequestingSession(true);
+    void createActiveSession({ type: "General" })
+      .catch((error) => {
+        console.error("Failed to create active session:", error);
+      })
+      .finally(() => {
+        setRequestingSession(false);
+      });
+  }, [activeSession, createActiveSession, requestingSession, shouldAutoCreateSession]);
+
+  useEffect(() => {
+    if (!exerciseName && liveTiming?.activeSet?.exerciseName) {
+      setExerciseName(liveTiming.activeSet.exerciseName);
+    }
+  }, [exerciseName, liveTiming?.activeSet?.exerciseName]);
+
   const handleSend = () => {
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
-    // Placeholder — actual send wiring in Wave 2
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -67,14 +159,115 @@ export default function WorkoutPage() {
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   };
 
+  const hasFirstSetTiming =
+    liveTiming?.firstSetStartedAt !== null &&
+    liveTiming?.firstSetStartedAt !== undefined;
+  const workoutElapsedMs = useMemo(() => {
+    if (hasFirstSetTiming) {
+      const start = liveTiming?.firstSetStartedAt ?? nowMs;
+      const end = liveTiming?.lastSetEndedAt ?? nowMs;
+      return Math.max(0, end - start);
+    }
+
+    if (activeSession?.startTime !== undefined) {
+      return Math.max(0, nowMs - activeSession.startTime);
+    }
+
+    return 0;
+  }, [
+    activeSession?.startTime,
+    hasFirstSetTiming,
+    liveTiming?.firstSetStartedAt,
+    liveTiming?.lastSetEndedAt,
+    nowMs,
+  ]);
+
+  const activeSetElapsedMs = liveTiming?.activeSet
+    ? Math.max(0, nowMs - liveTiming.activeSet.startedAt)
+    : null;
+  const activeRestElapsedMs = liveTiming?.activeRest
+    ? Math.max(0, nowMs - liveTiming.activeRest.startedAt)
+    : null;
+  const lastRestMs = useMemo(() => getLastRestDurationMs(exercises), [exercises]);
+  const feedExercises = useMemo(() => mapFeedExercises(exercises), [exercises]);
+
+  const parsedWeight = Number(weight);
+  const parsedReps = Number(reps);
+  const targetExerciseName = (
+    liveTiming?.activeSet?.exerciseName ?? exerciseName
+  ).trim();
+
+  const canStartSet =
+    Boolean(activeSession) &&
+    exerciseName.trim().length > 0 &&
+    !isStartingSet &&
+    !isCompletingSet;
+  const canCompleteSet =
+    Boolean(activeSession) &&
+    targetExerciseName.length > 0 &&
+    Number.isFinite(parsedWeight) &&
+    Number.isFinite(parsedReps) &&
+    parsedWeight > 0 &&
+    parsedReps > 0 &&
+    !isCompletingSet &&
+    !isStartingSet;
+
+  const handleStartSet = async () => {
+    if (!activeSession || !canStartSet) return;
+    setIsStartingSet(true);
+    try {
+      await startSet({
+        sessionId: activeSession._id,
+        exerciseName: exerciseName.trim(),
+      });
+    } catch (error) {
+      console.error("Failed to start set:", error);
+    } finally {
+      setIsStartingSet(false);
+    }
+  };
+
+  const handleCompleteSet = async () => {
+    if (!activeSession || !canCompleteSet) return;
+    setIsCompletingSet(true);
+    try {
+      await completeSet({
+        sessionId: activeSession._id,
+        exerciseName: targetExerciseName,
+        weight: parsedWeight,
+        reps: parsedReps,
+      });
+      setWeight("");
+      setReps("");
+    } catch (error) {
+      console.error("Failed to complete set:", error);
+    } finally {
+      setIsCompletingSet(false);
+    }
+  };
+
+  const handleFinishWorkout = async () => {
+    if (isFinishingWorkout) return;
+    setIsFinishingWorkout(true);
+    setShouldAutoCreateSession(false);
+    try {
+      if (activeSession) {
+        await finishActiveSession({ sessionId: activeSession._id });
+      }
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Failed to finish workout:", error);
+      setShouldAutoCreateSession(true);
+      setIsFinishingWorkout(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen h-[100dvh]" style={{ background: "#0a0a0a" }}>
-      {/* ── Top Bar ──────────────────────────────────────── */}
       <div
         className="shrink-0 flex items-center justify-between px-4 py-3"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
-        {/* Timer */}
         <div className="flex items-center gap-3">
           <div
             className="w-2 h-2 rounded-full"
@@ -90,7 +283,7 @@ export default function WorkoutPage() {
               color: "#ebebeb",
             }}
           >
-            {formatTimer(elapsed)}
+            {formatDuration(workoutElapsedMs)}
           </span>
           <span
             className="text-[10px] uppercase tracking-widest"
@@ -99,17 +292,17 @@ export default function WorkoutPage() {
               color: "rgba(255,255,255,0.3)",
             }}
           >
-            Workout Active
+            {hasFirstSetTiming ? "First-set elapsed" : "Session elapsed"}
           </span>
         </div>
 
-        {/* Finish Workout */}
         <motion.button
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => router.push("/dashboard")}
+          onClick={handleFinishWorkout}
+          disabled={isFinishingWorkout}
           aria-label="Finish workout and return to dashboard"
-          className="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer"
+          className="px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           style={{
             background: "rgba(255,45,45,0.12)",
             border: "1px solid rgba(255,45,45,0.3)",
@@ -117,55 +310,125 @@ export default function WorkoutPage() {
             fontFamily: "var(--font-display)",
           }}
         >
-          Finish Workout
+          {isFinishingWorkout ? "Finishing..." : "Finish Workout"}
         </motion.button>
       </div>
 
-      {/* ── Exercise Feed (top ~60%) ─────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 min-h-0">
-        <div className="flex flex-col items-center justify-center h-full gap-4">
-          {/* Dumbbell icon */}
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6.5 6.5h11v11h-11z" opacity="0" />
-            <rect x="2" y="9" width="3" height="6" rx="1" />
-            <rect x="19" y="9" width="3" height="6" rx="1" />
-            <rect x="5" y="7" width="3" height="10" rx="1" />
-            <rect x="16" y="7" width="3" height="10" rx="1" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-          </svg>
-          <p
-            className="text-center leading-relaxed"
-            style={{
-              color: "rgba(255,255,255,0.25)",
-              fontFamily: "var(--font-sans)",
-              fontSize: "14px",
-              maxWidth: "260px",
-            }}
-          >
-            Your exercises will appear here as you log them
-          </p>
-          <span
-            className="text-[10px] uppercase tracking-widest"
-            style={{
-              fontFamily: "var(--font-mono)",
-              color: "rgba(255,255,255,0.15)",
-            }}
-          >
-            Chat below to get started
-          </span>
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div
+          className="shrink-0 px-4 py-3 border-b border-white/[0.06] space-y-2"
+          style={{ background: "rgba(255,255,255,0.01)" }}
+        >
+          <div className="grid grid-cols-12 gap-2">
+            <input
+              value={exerciseName}
+              onChange={(e) => setExerciseName(e.target.value)}
+              placeholder="Exercise name"
+              className="col-span-12 sm:col-span-5 rounded-lg px-3 py-2 text-sm outline-none"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#ebebeb",
+                fontFamily: "var(--font-sans)",
+              }}
+            />
+            <input
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              placeholder="Weight"
+              className="col-span-6 sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#ebebeb",
+                fontFamily: "var(--font-sans)",
+              }}
+            />
+            <input
+              value={reps}
+              onChange={(e) => setReps(e.target.value)}
+              type="number"
+              inputMode="numeric"
+              min="0"
+              placeholder="Reps"
+              className="col-span-6 sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#ebebeb",
+                fontFamily: "var(--font-sans)",
+              }}
+            />
+            <button
+              onClick={handleStartSet}
+              disabled={!canStartSet}
+              className="col-span-6 sm:col-span-1 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: "rgba(255,45,45,0.16)",
+                border: "1px solid rgba(255,45,45,0.3)",
+                color: "#ff2d2d",
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              {isStartingSet ? "..." : "Start"}
+            </button>
+            <button
+              onClick={handleCompleteSet}
+              disabled={!canCompleteSet}
+              className="col-span-6 sm:col-span-2 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "rgba(255,255,255,0.85)",
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              {isCompletingSet ? "Logging..." : "Complete Set"}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-white/45">
+              {activeSession ? `Session ${activeSession._id.slice(-6)}` : "Preparing session..."}
+            </span>
+            {activeSetElapsedMs !== null && liveTiming?.activeSet && (
+              <span className="font-mono text-[10px] text-[#ff2d2d]">
+                Active set {formatDuration(activeSetElapsedMs)} · {liveTiming.activeSet.exerciseName}
+              </span>
+            )}
+            {activeRestElapsedMs !== null && (
+              <span className="font-mono text-[10px] text-white/60">
+                Rest {formatDuration(activeRestElapsedMs)}
+              </span>
+            )}
+            {activeRestElapsedMs === null && lastRestMs !== null && (
+              <span className="font-mono text-[10px] text-white/40">
+                Last rest {formatDuration(lastRestMs)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0">
+          <ActiveExerciseFeed
+            exercises={feedExercises}
+            activeSet={
+              liveTiming?.activeSet
+                ? {
+                    exerciseName: liveTiming.activeSet.exerciseName,
+                    elapsedMs: activeSetElapsedMs ?? 0,
+                  }
+                : null
+            }
+            activeRestMs={activeRestElapsedMs}
+            lastRestMs={lastRestMs}
+          />
         </div>
       </div>
 
-      {/* ── Chat Area (bottom ~40vh) ─────────────────────── */}
       <div
         className="shrink-0 flex flex-col h-[40vh]"
         style={{
@@ -174,7 +437,6 @@ export default function WorkoutPage() {
           backdropFilter: "blur(24px)",
         }}
       >
-        {/* Chat header */}
         <div
           className="shrink-0 flex items-center justify-between px-4 py-2.5"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
@@ -199,7 +461,6 @@ export default function WorkoutPage() {
             </span>
           </div>
 
-          {/* Model selector */}
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
@@ -221,7 +482,6 @@ export default function WorkoutPage() {
           </select>
         </div>
 
-        {/* Messages area */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
           {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full gap-2">
@@ -294,7 +554,6 @@ export default function WorkoutPage() {
             </div>
           ))}
 
-          {/* Streaming indicator placeholder */}
           {isStreaming && !streamingContent && (
             <div className="flex items-start">
               <div
@@ -315,7 +574,6 @@ export default function WorkoutPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input bar */}
         <div
           className="shrink-0 px-4 py-2.5"
           style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
