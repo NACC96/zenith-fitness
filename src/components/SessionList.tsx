@@ -11,6 +11,19 @@ interface SessionListProps {
   onAddType: () => void;
 }
 
+function getSessionDurationLabel(workout: WorkoutSession): string {
+  if (workout.duration) return workout.duration;
+  if (
+    workout.firstSetStartedAt !== undefined &&
+    workout.lastSetEndedAt !== undefined
+  ) {
+    const durationMs = Math.max(0, workout.lastSetEndedAt - workout.firstSetStartedAt);
+    return `${Math.round(durationMs / 60000)} min`;
+  }
+
+  return "--";
+}
+
 export default function SessionList({
   workouts,
   selectedSession,
@@ -59,6 +72,7 @@ export default function SessionList({
             (sum, ex) => sum + ex.sets.length,
             0
           );
+          const durationLabel = getSessionDurationLabel(workout);
 
           // Volume per exercise for mini bars
           const exerciseVolumes = workout.exercises.map((ex) =>
@@ -133,6 +147,12 @@ export default function SessionList({
                     Sets
                   </span>
                   <span className="text-xs text-white/70">{setCount}</span>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] uppercase tracking-wider text-white/30 block">
+                    Duration
+                  </span>
+                  <span className="text-xs text-white/70">{durationLabel}</span>
                 </div>
               </div>
 

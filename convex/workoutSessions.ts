@@ -1,6 +1,15 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+type TimedSetLike = {
+  startedAt?: number;
+  endedAt?: number;
+};
+
+type ExerciseWithTimedSets = {
+  sets: TimedSetLike[];
+};
+
 function formatSessionLabel(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
   if (!year || !month || !day) return date;
@@ -24,6 +33,30 @@ function formatDurationMinutes(durationMs: number): string {
   return `${Math.round(durationMs / 60000)} min`;
 }
 
+function resolveSetTimingBounds(exercises: ExerciseWithTimedSets[]) {
+  let earliestStartedAt: number | undefined;
+  let latestEndedAt: number | undefined;
+
+  for (const exercise of exercises) {
+    for (const set of exercise.sets) {
+      if (set.startedAt !== undefined) {
+        earliestStartedAt =
+          earliestStartedAt === undefined
+            ? set.startedAt
+            : Math.min(earliestStartedAt, set.startedAt);
+      }
+      if (set.endedAt !== undefined) {
+        latestEndedAt =
+          latestEndedAt === undefined
+            ? set.endedAt
+            : Math.max(latestEndedAt, set.endedAt);
+      }
+    }
+  }
+
+  return { earliestStartedAt, latestEndedAt };
+}
+
 // Get all sessions with their exercises, sorted by date desc
 export const listAll = query({
   args: {},
@@ -39,10 +72,21 @@ export const listAll = query({
           .query("exercises")
           .withIndex("by_session", (q) => q.eq("sessionId", session._id))
           .collect();
+        const { earliestStartedAt, latestEndedAt } = resolveSetTimingBounds(exercises);
+        const firstSetStartedAt = session.firstSetStartedAt ?? earliestStartedAt;
+        const lastSetEndedAt = session.lastSetEndedAt ?? latestEndedAt;
+        const duration =
+          session.duration ??
+          (firstSetStartedAt === undefined || lastSetEndedAt === undefined
+            ? undefined
+            : formatDurationMinutes(Math.max(0, lastSetEndedAt - firstSetStartedAt)));
 
         return {
           ...session,
           id: session._id,
+          firstSetStartedAt,
+          lastSetEndedAt,
+          duration,
           exercises: exercises.map((ex) => ({
             name: ex.name,
             sets: ex.sets,
@@ -185,19 +229,42 @@ export const finishActive = mutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
+
+    const exercises = await ctx.db
+      .query("exercises")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    const { earliestStartedAt, latestEndedAt } = resolveSetTimingBounds(exercises);
+    const firstSetStartedAt = session.firstSetStartedAt ?? earliestStartedAt;
+    const lastSetEndedAt = session.lastSetEndedAt ?? latestEndedAt;
     const now = Date.now();
-    const timingStart = session.firstSetStartedAt ?? session.startTime;
-    const timingEnd = session.lastSetEndedAt ?? now;
+    const timingStart = firstSetStartedAt ?? session.startTime;
+    const timingEnd = lastSetEndedAt ?? (timingStart === undefined ? undefined : now);
     const duration =
-      timingStart === undefined
+      timingStart === undefined || timingEnd === undefined
         ? undefined
         : formatDurationMinutes(Math.max(0, timingEnd - timingStart));
-    await ctx.db.patch(args.sessionId, {
+
+    const patch: {
+      status: "completed";
+      duration?: string;
+      firstSetStartedAt?: number;
+      lastSetEndedAt?: number;
+      activeSet: undefined;
+      activeRestStartedAt: undefined;
+    } = {
       status: "completed",
-      duration,
       activeSet: undefined,
       activeRestStartedAt: undefined,
-    });
+    };
+
+    const resolvedDuration = duration ?? session.duration;
+    if (resolvedDuration !== undefined) patch.duration = resolvedDuration;
+    if (firstSetStartedAt !== undefined) patch.firstSetStartedAt = firstSetStartedAt;
+    if (timingEnd !== undefined) patch.lastSetEndedAt = timingEnd;
+
+    await ctx.db.patch(args.sessionId, patch);
   },
 });
 
