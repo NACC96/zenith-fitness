@@ -65,7 +65,7 @@ const init = internalMutation(async (ctx) => {
   const session2 = await ctx.db.insert("workoutSessions", {
     type: "Chest",
     date: "2026-02-08",
-    label: "Sat, Feb 8",
+    label: "Sun, Feb 8",
   });
   await ctx.db.insert("exercises", {
     sessionId: session2,
@@ -112,7 +112,7 @@ const init = internalMutation(async (ctx) => {
   const session3 = await ctx.db.insert("workoutSessions", {
     type: "Chest",
     date: "2026-02-15",
-    label: "Sat, Feb 15",
+    label: "Sun, Feb 15",
   });
   await ctx.db.insert("exercises", {
     sessionId: session3,

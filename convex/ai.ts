@@ -17,7 +17,7 @@ Key rules:
 - If the user doesn't specify a workout type, infer it (bench/incline/flys = Chest, squat/leg press = Legs, etc.)
 - Be concise but friendly. Use the user's data for personalized feedback.
 - Today's date is ${new Date().toISOString().split("T")[0]}
-- Format dates as "Day, Mon DD" (e.g., "Sat, Feb 15") for labels`;
+- You only need to provide ISO dates. Session labels are generated server-side.`;
 
 const TOOLS = [
   {
@@ -35,10 +35,6 @@ const TOOLS = [
               "Workout type (e.g., Chest, Back, Legs, Shoulders, Arms)",
           },
           date: { type: "string", description: "ISO date YYYY-MM-DD" },
-          label: {
-            type: "string",
-            description: "Human-readable date label like 'Sat, Feb 15'",
-          },
           exerciseName: {
             type: "string",
             description: "Exercise name (e.g., Bench Press, Squat)",
@@ -55,7 +51,7 @@ const TOOLS = [
             },
           },
         },
-        required: ["type", "date", "label", "exerciseName", "sets"],
+        required: ["type", "date", "exerciseName", "sets"],
       },
     },
   },
@@ -366,7 +362,6 @@ async function handleLogExercise(ctx: any, args: any): Promise<string> {
     sessionId = await ctx.runMutation(api.workoutSessions.create, {
       type: args.type,
       date: args.date,
-      label: args.label,
     });
     await ctx.runMutation(api.workoutTypes.create, { name: args.type });
   } else {

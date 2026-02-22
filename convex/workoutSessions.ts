@@ -1,6 +1,25 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+function formatSessionLabel(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(utcDate.getTime())) return date;
+
+  const weekday = utcDate.toLocaleDateString("en-US", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  const monthName = utcDate.toLocaleDateString("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  });
+
+  return `${weekday}, ${monthName} ${day}`;
+}
+
 // Get all sessions with their exercises, sorted by date desc
 export const listAll = query({
   args: {},
@@ -60,14 +79,34 @@ export const create = mutation({
   args: {
     type: v.string(),
     date: v.string(),
-    label: v.string(),
+    label: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const computedLabel = formatSessionLabel(args.date);
     return await ctx.db.insert("workoutSessions", {
       type: args.type,
       date: args.date,
-      label: args.label,
+      label: computedLabel,
     });
+  },
+});
+
+// Backfill labels from date for existing sessions
+export const normalizeLabels = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.db.query("workoutSessions").collect();
+    let updated = 0;
+
+    for (const session of sessions) {
+      const computedLabel = formatSessionLabel(session.date);
+      if (session.label !== computedLabel) {
+        await ctx.db.patch(session._id, { label: computedLabel });
+        updated += 1;
+      }
+    }
+
+    return { total: sessions.length, updated };
   },
 });
 
