@@ -20,6 +20,10 @@ function formatSessionLabel(date: string): string {
   return `${weekday}, ${monthName} ${day}`;
 }
 
+function formatDurationMinutes(durationMs: number): string {
+  return `${Math.round(durationMs / 60000)} min`;
+}
+
 // Get all sessions with their exercises, sorted by date desc
 export const listAll = query({
   args: {},
@@ -107,6 +111,93 @@ export const normalizeLabels = mutation({
     }
 
     return { total: sessions.length, updated };
+  },
+});
+
+// Create an active workout session
+export const createActive = mutation({
+  args: { workoutTypeId: v.optional(v.id("workoutTypes")), type: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const today = new Date().toISOString().split("T")[0];
+    return await ctx.db.insert("workoutSessions", {
+      label: "Active Workout",
+      date: today,
+      type: args.type ?? "General",
+      status: "active",
+      startTime: now,
+      workoutTypeId: args.workoutTypeId,
+    });
+  },
+});
+
+// Get the currently active workout session
+export const getActive = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("workoutSessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .first();
+  },
+});
+
+// Read live timing state for an active workout session
+export const getLiveTimingState = query({
+  args: { sessionId: v.id("workoutSessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+
+    const now = Date.now();
+    const workoutStartedAt = session.firstSetStartedAt;
+    const workoutEndedAt = session.lastSetEndedAt;
+
+    return {
+      sessionId: session._id,
+      status: session.status ?? null,
+      firstSetStartedAt: workoutStartedAt ?? null,
+      lastSetEndedAt: workoutEndedAt ?? null,
+      workoutElapsedMs:
+        workoutStartedAt === undefined
+          ? null
+          : Math.max(0, (workoutEndedAt ?? now) - workoutStartedAt),
+      activeSet: session.activeSet
+        ? {
+            exerciseName: session.activeSet.exerciseName,
+            startedAt: session.activeSet.startedAt,
+            elapsedMs: Math.max(0, now - session.activeSet.startedAt),
+          }
+        : null,
+      activeRest: session.activeRestStartedAt
+        ? {
+            startedAt: session.activeRestStartedAt,
+            elapsedMs: Math.max(0, now - session.activeRestStartedAt),
+          }
+        : null,
+    };
+  },
+});
+
+// Finish an active workout session
+export const finishActive = mutation({
+  args: { sessionId: v.id("workoutSessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+    const now = Date.now();
+    const timingStart = session.firstSetStartedAt ?? session.startTime;
+    const timingEnd = session.lastSetEndedAt ?? now;
+    const duration =
+      timingStart === undefined
+        ? undefined
+        : formatDurationMinutes(Math.max(0, timingEnd - timingStart));
+    await ctx.db.patch(args.sessionId, {
+      status: "completed",
+      duration,
+      activeSet: undefined,
+      activeRestStartedAt: undefined,
+    });
   },
 });
 
