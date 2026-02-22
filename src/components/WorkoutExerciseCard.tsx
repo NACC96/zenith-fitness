@@ -9,9 +9,20 @@ interface WorkoutExerciseCardProps {
     weight: number;
     reps: number;
     setNumber: number;
+    startedAt?: number;
+    endedAt?: number;
+    restStartedAt?: number;
+    restEndedAt?: number;
   }>;
   totalVolume: number;
   index?: number;
+}
+
+function formatDuration(ms: number): string {
+  const safeMs = Math.max(0, ms);
+  const minutes = Math.floor(safeMs / 60000);
+  const seconds = Math.floor((safeMs % 60000) / 1000);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export default function WorkoutExerciseCard({
@@ -58,18 +69,30 @@ export default function WorkoutExerciseCard({
             {sets.map((set) => (
               <div
                 key={set.setNumber}
-                className="font-mono text-xs px-2 py-1 rounded-lg"
+                className="font-mono text-xs px-2 py-1 rounded-lg min-w-[110px]"
                 style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.06)",
                 }}
               >
-                <span className="text-white/30 text-[10px]">
-                  {set.setNumber}:
-                </span>{" "}
-                <span className="text-white/70">{set.weight}</span>
-                <span className="text-white/30">&times;</span>
-                <span className="text-white/60">{set.reps}</span>
+                <div>
+                  <span className="text-white/30 text-[10px]">
+                    {set.setNumber}:
+                  </span>{" "}
+                  <span className="text-white/70">{set.weight}</span>
+                  <span className="text-white/30">&times;</span>
+                  <span className="text-white/60">{set.reps}</span>
+                </div>
+                <div className="text-[9px] text-white/35">
+                  {set.startedAt !== undefined && set.endedAt !== undefined ? (
+                    <span>set {formatDuration(set.endedAt - set.startedAt)}</span>
+                  ) : (
+                    <span>&nbsp;</span>
+                  )}
+                  {set.restStartedAt !== undefined && set.restEndedAt !== undefined && (
+                    <span> · rest {formatDuration(set.restEndedAt - set.restStartedAt)}</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>

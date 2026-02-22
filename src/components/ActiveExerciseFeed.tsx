@@ -8,12 +8,36 @@ import WorkoutExerciseCard from "./WorkoutExerciseCard";
 interface ActiveExerciseFeedProps {
   exercises: Array<{
     name: string;
-    sets: Array<{ weight: number; reps: number; setNumber: number }>;
+    sets: Array<{
+      weight: number;
+      reps: number;
+      setNumber: number;
+      startedAt?: number;
+      endedAt?: number;
+      restStartedAt?: number;
+      restEndedAt?: number;
+    }>;
   }>;
+  activeSet: {
+    exerciseName: string;
+    elapsedMs: number;
+  } | null;
+  activeRestMs: number | null;
+  lastRestMs: number | null;
+}
+
+function formatDuration(ms: number): string {
+  const safeMs = Math.max(0, ms);
+  const minutes = Math.floor(safeMs / 60000);
+  const seconds = Math.floor((safeMs % 60000) / 1000);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export default function ActiveExerciseFeed({
   exercises,
+  activeSet,
+  activeRestMs,
+  lastRestMs,
 }: ActiveExerciseFeedProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const totalSetCount = exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
@@ -35,12 +59,29 @@ export default function ActiveExerciseFeed({
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Summary bar */}
-      {exercises.length > 0 && (
+      {(exercises.length > 0 || activeSet || activeRestMs !== null) && (
         <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06]">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-white/40">
-            {exercises.length} {exercises.length === 1 ? "exercise" : "exercises"}{" "}
-            &middot; {totalSetCount} {totalSetCount === 1 ? "set" : "sets"}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-white/40">
+              {exercises.length} {exercises.length === 1 ? "exercise" : "exercises"}{" "}
+              &middot; {totalSetCount} {totalSetCount === 1 ? "set" : "sets"}
+            </span>
+            {activeSet && (
+              <span className="font-mono text-[10px] text-[#ff2d2d]">
+                Set {formatDuration(activeSet.elapsedMs)} · {activeSet.exerciseName}
+              </span>
+            )}
+            {activeRestMs !== null && (
+              <span className="font-mono text-[10px] text-white/55">
+                Rest {formatDuration(activeRestMs)}
+              </span>
+            )}
+            {activeRestMs === null && lastRestMs !== null && (
+              <span className="font-mono text-[10px] text-white/40">
+                Last rest {formatDuration(lastRestMs)}
+              </span>
+            )}
+          </div>
           <span className="font-mono text-[10px] text-white/40">
             {formatNum(totalVolume)} lbs total
           </span>
