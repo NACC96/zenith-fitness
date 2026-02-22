@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { WorkoutSession } from "@/lib/types";
+import { motion } from "framer-motion";
 import Header from "@/components/Header";
 import StatsRow from "@/components/StatsRow";
 import VolumeTrendChart from "@/components/VolumeTrendChart";
@@ -17,6 +19,7 @@ import ChatToggleButton from "@/components/ChatToggleButton";
 import Portal from "@/components/Portal";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -228,12 +231,43 @@ export default function DashboardPage() {
       />
 
       <main className="px-5 py-6 md:px-10 md:py-8">
-        {/* Filter summary */}
-        <p className="mb-6 font-mono text-xs uppercase tracking-widest text-white/40">
-          {activeFilter === "All" ? "All Workouts" : activeFilter} —{" "}
-          {filteredSessions.length} session
-          {filteredSessions.length !== 1 && "s"}
-        </p>
+        {/* Filter summary + Start Workout */}
+        <div className="flex items-center justify-between mb-6">
+          <p className="font-mono text-xs uppercase tracking-widest text-white/40">
+            {activeFilter === "All" ? "All Workouts" : activeFilter} —{" "}
+            {filteredSessions.length} session
+            {filteredSessions.length !== 1 && "s"}
+          </p>
+
+          <motion.button
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => router.push("/workout")}
+            aria-label="Start workout"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer"
+            style={{
+              background: "rgba(255,45,45,0.1)",
+              border: "1px solid rgba(255,45,45,0.3)",
+              color: "#ff2d2d",
+              fontFamily: "var(--font-display)",
+              boxShadow: "0 0 20px rgba(255,45,45,0.1)",
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Start Workout
+          </motion.button>
+        </div>
 
         {/* Stats row */}
         <StatsRow workouts={allWorkouts} activeFilter={activeFilter} />
