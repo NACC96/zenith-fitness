@@ -19,6 +19,29 @@ Key rules:
 - Today's date is ${new Date().toISOString().split("T")[0]}
 - You only need to provide ISO dates. Session labels are generated server-side.`;
 
+function getWorkoutSystemPrompt(workoutSessionId: string): string {
+  return `You are Zenith AI, a live workout assistant. The user is actively working out at the gym right now.
+
+BEHAVIOR:
+- When the user logs a lift (e.g., "bench 135 for 10"), confirm it concisely: "Got it: Bench Press — 135 lbs × 10 reps ✓"
+- You can answer questions about their workout history, suggest next exercises, give form tips
+- Be encouraging but brief — they're between sets
+- Always use the logExercise tool to record exercises — ALWAYS use the active workout session ID provided
+
+ACTIVE SESSION: The current workout session ID is ${workoutSessionId}. ALL exercises should be logged to this session.
+
+You have access to these tools:
+- logExercise: Log an exercise set (ALWAYS use sessionId: "${workoutSessionId}")
+- getWorkoutHistory: Check past workouts
+- getExerciseStats: Get stats for a specific exercise
+- createWorkoutType: Create a new workout type
+
+Key rules:
+- Weight is always in pounds (lb)
+- Today's date is ${new Date().toISOString().split("T")[0]}
+- Be concise — the user is mid-workout`;
+}
+
 const TOOLS = [
   {
     type: "function" as const,
@@ -49,6 +72,11 @@ const TOOLS = [
               },
               required: ["weight", "reps"],
             },
+          },
+          sessionId: {
+            type: "string",
+            description:
+              "Workout session ID to log to (used in workout mode)",
           },
         },
         required: ["type", "date", "exerciseName", "sets"],
@@ -124,10 +152,14 @@ function sseHeaders() {
 }
 
 export const streamChat = httpAction(async (ctx, request) => {
-  const { sessionId, content, model, messageHistory } = await request.json();
+  const { sessionId, content, model, messageHistory, workoutSessionId } = await request.json();
+
+  const systemPrompt = workoutSessionId
+    ? getWorkoutSystemPrompt(workoutSessionId)
+    : SYSTEM_PROMPT;
 
   const messages: any[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     ...(messageHistory || []),
     { role: "user", content },
   ];
@@ -272,7 +304,7 @@ export const streamChat = httpAction(async (ctx, request) => {
               let result: string;
               try {
                 if (toolName === "logExercise") {
-                  result = await handleLogExercise(ctx, toolArgs);
+                  result = await handleLogExercise(ctx, toolArgs, workoutSessionId);
                 } else if (toolName === "getWorkoutHistory") {
                   result = await handleGetHistory(ctx, toolArgs);
                 } else if (toolName === "getExerciseStats") {
@@ -351,21 +383,36 @@ export const streamChat = httpAction(async (ctx, request) => {
 });
 
 // Tool handler implementations
-async function handleLogExercise(ctx: any, args: any): Promise<string> {
-  const sessions = await ctx.runQuery(api.workoutSessions.listAll);
-  const session = sessions.find(
-    (s: any) => s.date === args.date && s.type === args.type
-  );
+async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string): Promise<string> {
+  // In workout mode, use the active session directly
+  const targetSessionId = args.sessionId || workoutSessionId;
 
   let sessionId;
-  if (!session) {
-    sessionId = await ctx.runMutation(api.workoutSessions.create, {
-      type: args.type,
-      date: args.date,
+  if (targetSessionId) {
+    // Verify the session exists
+    const session = await ctx.runQuery(api.workoutSessions.getWithExercises, {
+      sessionId: targetSessionId as Id<"workoutSessions">,
     });
-    await ctx.runMutation(api.workoutTypes.create, { name: args.type });
+    if (!session) {
+      return JSON.stringify({ error: "Active workout session not found" });
+    }
+    sessionId = targetSessionId as Id<"workoutSessions">;
   } else {
-    sessionId = session._id;
+    // Original behavior: find or create session by date+type
+    const sessions = await ctx.runQuery(api.workoutSessions.listAll);
+    const session = sessions.find(
+      (s: any) => s.date === args.date && s.type === args.type
+    );
+
+    if (!session) {
+      sessionId = await ctx.runMutation(api.workoutSessions.create, {
+        type: args.type,
+        date: args.date,
+      });
+      await ctx.runMutation(api.workoutTypes.create, { name: args.type });
+    } else {
+      sessionId = session._id;
+    }
   }
 
   await ctx.runMutation(api.exercises.add, {
