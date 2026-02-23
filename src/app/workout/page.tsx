@@ -17,7 +17,7 @@ const MODELS = [
   { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
 ];
 
-type ChatMessage = { id: string; role: "user" | "assistant"; content: string };
+type StreamHistoryMessage = { role: "user" | "assistant"; content: string };
 type TimedSet = {
   weight: number;
   reps: number;
@@ -73,10 +73,11 @@ function mapFeedExercises(exercises: ExerciseDoc[]) {
 
 export default function WorkoutPage() {
   const router = useRouter();
-  const [messages] = useState<ChatMessage[]>([]);
+  const [activeChatSessionId, setActiveChatSessionId] = useState<Id<"chatSessions"> | null>(null);
+  const [creatingChatSession, setCreatingChatSession] = useState(false);
   const [input, setInput] = useState("");
-  const [isStreaming] = useState(false);
-  const [streamingContent] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
   const [selectedModel, setSelectedModel] = useState("google/gemini-3.1-pro-preview");
   const [exerciseName, setExerciseName] = useState("");
   const [weight, setWeight] = useState("");
@@ -93,6 +94,8 @@ export default function WorkoutPage() {
   const activeSession = useQuery(api.workoutSessions.getActive);
   const createActiveSession = useMutation(api.workoutSessions.createActive);
   const finishActiveSession = useMutation(api.workoutSessions.finishActive);
+  const createChatSession = useMutation(api.chatSessions.create);
+  const sendChatMessage = useMutation(api.chatMessages.send);
   const startSet = useMutation(api.exercises.startSet);
   const completeSet = useMutation(api.exercises.completeSet);
   const exercisesRaw = useQuery(
@@ -103,6 +106,11 @@ export default function WorkoutPage() {
     api.workoutSessions.getLiveTimingState,
     activeSession ? { sessionId: activeSession._id } : "skip",
   );
+  const chatMessages =
+    useQuery(
+      api.chatMessages.list,
+      activeChatSessionId ? { sessionId: activeChatSessionId } : "skip",
+    ) ?? [];
 
   const exercises = (exercisesRaw ?? []) as ExerciseDoc[];
 
@@ -115,7 +123,7 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
+  }, [chatMessages, streamingContent]);
 
   useEffect(() => {
     if (!shouldAutoCreateSession || activeSession !== null || requestingSession) return;
@@ -136,19 +144,128 @@ export default function WorkoutPage() {
     }
   }, [exerciseName, liveTiming?.activeSet?.exerciseName]);
 
-  const handleSend = () => {
+  useEffect(() => {
+    if (!activeSession?._id) {
+      setActiveChatSessionId(null);
+      return;
+    }
+    if (activeChatSessionId || creatingChatSession) return;
+
+    const storageKey = `workout-chat-session:${activeSession._id}`;
+    const storedSessionId = window.sessionStorage.getItem(storageKey);
+    if (storedSessionId) {
+      setActiveChatSessionId(storedSessionId as Id<"chatSessions">);
+      return;
+    }
+
+    setCreatingChatSession(true);
+    void createChatSession()
+      .then((sessionId) => {
+        setActiveChatSessionId(sessionId);
+        window.sessionStorage.setItem(storageKey, sessionId);
+      })
+      .catch((error) => {
+        console.error("Failed to create workout chat session:", error);
+      })
+      .finally(() => {
+        setCreatingChatSession(false);
+      });
+  }, [activeSession?._id, activeChatSessionId, creatingChatSession, createChatSession]);
+
+  const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isStreaming) return;
+    if (!trimmed || isStreaming || !activeChatSessionId) return;
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+    }
+
+    try {
+      await sendChatMessage({
+        sessionId: activeChatSessionId,
+        content: trimmed,
+        model: selectedModel,
+      });
+
+      const messageHistory: StreamHistoryMessage[] = chatMessages.slice(-20).map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+
+      setIsStreaming(true);
+      setStreamingContent("");
+
+      const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+      const baseUrl =
+        siteUrl ||
+        (process.env.NEXT_PUBLIC_CONVEX_URL?.replace(".cloud", ".site") ?? "");
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: activeChatSessionId,
+          content: trimmed,
+          model: selectedModel,
+          messageHistory,
+          workoutSessionId: activeSession?._id,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+
+          try {
+            const parsed = JSON.parse(data) as {
+              token?: string;
+              done?: boolean;
+              error?: string;
+              thinking?: boolean;
+            };
+
+            if (parsed.token) {
+              accumulated += parsed.token;
+              setStreamingContent(accumulated);
+              continue;
+            }
+            if (parsed.done || parsed.error) {
+              break;
+            }
+          } catch {
+            // Ignore malformed chunks.
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Workout chat streaming failed:", error);
+    } finally {
+      setIsStreaming(false);
+      setStreamingContent("");
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -483,7 +600,7 @@ export default function WorkoutPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
-          {messages.length === 0 && !isStreaming && (
+          {chatMessages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full gap-2">
               <p
                 className="text-center"
@@ -518,9 +635,9 @@ export default function WorkoutPage() {
             </div>
           )}
 
-          {messages.map((msg) => (
+          {chatMessages.map((msg) => (
             <div
-              key={msg.id}
+              key={msg._id}
               className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
               <div
@@ -554,7 +671,7 @@ export default function WorkoutPage() {
             </div>
           ))}
 
-          {isStreaming && !streamingContent && (
+          {isStreaming && (
             <div className="flex items-start">
               <div
                 className="px-3 py-2.5 flex items-center gap-1.5"
@@ -564,9 +681,24 @@ export default function WorkoutPage() {
                   borderRadius: "0.875rem 0.875rem 0.875rem 0.25rem",
                 }}
               >
-                <span className="chat-dot" style={{ animationDelay: "0ms" }} />
-                <span className="chat-dot" style={{ animationDelay: "150ms" }} />
-                <span className="chat-dot" style={{ animationDelay: "300ms" }} />
+                {streamingContent ? (
+                  <p
+                    className="text-sm leading-relaxed whitespace-pre-wrap"
+                    style={{
+                      color: "rgba(255,255,255,0.8)",
+                      fontFamily: "var(--font-sans)",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {streamingContent}
+                  </p>
+                ) : (
+                  <>
+                    <span className="chat-dot" style={{ animationDelay: "0ms" }} />
+                    <span className="chat-dot" style={{ animationDelay: "150ms" }} />
+                    <span className="chat-dot" style={{ animationDelay: "300ms" }} />
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -586,7 +718,7 @@ export default function WorkoutPage() {
               onKeyDown={handleKeyDown}
               aria-label="Workout chat input"
               placeholder="Log a set or ask for help..."
-              disabled={isStreaming}
+              disabled={isStreaming || !activeChatSessionId}
               rows={1}
               className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none resize-none disabled:opacity-50"
               style={{
@@ -605,8 +737,10 @@ export default function WorkoutPage() {
               }}
             />
             <button
-              onClick={handleSend}
-              disabled={isStreaming || !input.trim()}
+              onClick={() => {
+                void handleSend();
+              }}
+              disabled={isStreaming || !input.trim() || !activeChatSessionId}
               aria-label="Send workout message"
               className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
