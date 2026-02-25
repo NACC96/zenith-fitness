@@ -276,3 +276,30 @@ export const remove = mutation({
     await ctx.db.delete(args.exerciseId);
   },
 });
+
+export const removeSet = mutation({
+  args: {
+    exerciseId: v.id("exercises"),
+    setIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const exercise = await ctx.db.get(args.exerciseId);
+    if (!exercise) throw new Error("Exercise not found");
+
+    if (args.setIndex < 0 || args.setIndex >= exercise.sets.length) {
+      throw new Error(
+        `Invalid set index ${args.setIndex}. Exercise has ${exercise.sets.length} sets.`
+      );
+    }
+
+    if (exercise.sets.length === 1) {
+      await ctx.db.delete(args.exerciseId);
+      return { deleted: "exercise" };
+    }
+
+    const nextSets = [...exercise.sets];
+    nextSets.splice(args.setIndex, 1);
+    await ctx.db.patch(args.exerciseId, { sets: nextSets });
+    return { deleted: "set" };
+  },
+});

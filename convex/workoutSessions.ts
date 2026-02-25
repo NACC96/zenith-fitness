@@ -115,6 +115,7 @@ export const getWithExercises = query({
       ...session,
       id: session._id,
       exercises: exercises.map((ex) => ({
+        _id: ex._id,
         name: ex.name,
         sets: ex.sets,
       })),
@@ -172,6 +173,14 @@ export const createActive = mutation({
       startTime: now,
       workoutTypeId: args.workoutTypeId,
     });
+  },
+});
+
+// Update workout session type
+export const updateType = mutation({
+  args: { sessionId: v.id("workoutSessions"), type: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.sessionId, { type: args.type });
   },
 });
 

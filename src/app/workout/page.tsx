@@ -17,7 +17,7 @@ const MODELS = [
   { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
 ];
 
-type StreamHistoryMessage = { role: "user" | "assistant"; content: string };
+type StreamHistoryMessage = { role: "user" | "assistant"; content: string; images?: string[] };
 type TimedSet = {
   weight: number;
   reps: number;
@@ -78,26 +78,22 @@ export default function WorkoutPage() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [selectedModel, setSelectedModel] = useState("google/gemini-3.1-pro-preview");
-  const [exerciseName, setExerciseName] = useState("");
-  const [weight, setWeight] = useState("");
-  const [reps, setReps] = useState("");
-  const [isStartingSet, setIsStartingSet] = useState(false);
-  const [isCompletingSet, setIsCompletingSet] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("anthropic/claude-sonnet-4.6");
   const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [shouldAutoCreateSession, setShouldAutoCreateSession] = useState(true);
   const [requestingSession, setRequestingSession] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeSession = useQuery(api.workoutSessions.getActive);
   const createActiveSession = useMutation(api.workoutSessions.createActive);
   const finishActiveSession = useMutation(api.workoutSessions.finishActive);
+  const removeSession = useMutation(api.workoutSessions.remove);
   const createChatSession = useMutation(api.chatSessions.create);
   const sendChatMessage = useMutation(api.chatMessages.send);
-  const startSet = useMutation(api.exercises.startSet);
-  const completeSet = useMutation(api.exercises.completeSet);
   const exercisesRaw = useQuery(
     api.exercises.listBySession,
     activeSession ? { sessionId: activeSession._id } : "skip",
@@ -139,12 +135,6 @@ export default function WorkoutPage() {
   }, [activeSession, createActiveSession, requestingSession, shouldAutoCreateSession]);
 
   useEffect(() => {
-    if (!exerciseName && liveTiming?.activeSet?.exerciseName) {
-      setExerciseName(liveTiming.activeSet.exerciseName);
-    }
-  }, [exerciseName, liveTiming?.activeSet?.exerciseName]);
-
-  useEffect(() => {
     if (!activeSession?._id) {
       setActiveChatSessionId(null);
       return;
@@ -174,8 +164,10 @@ export default function WorkoutPage() {
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isStreaming || !activeChatSessionId) return;
+    if ((!trimmed && attachedImages.length === 0) || isStreaming || !activeChatSessionId) return;
+    const imagesToSend = attachedImages.length > 0 ? attachedImages : undefined;
     setInput("");
+    setAttachedImages([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -184,12 +176,14 @@ export default function WorkoutPage() {
       await sendChatMessage({
         sessionId: activeChatSessionId,
         content: trimmed,
+        images: imagesToSend,
         model: selectedModel,
       });
 
       const messageHistory: StreamHistoryMessage[] = chatMessages.slice(-20).map((message) => ({
         role: message.role,
         content: message.content,
+        ...(message.images ? { images: message.images } : {}),
       }));
 
       setIsStreaming(true);
@@ -205,6 +199,7 @@ export default function WorkoutPage() {
         body: JSON.stringify({
           sessionId: activeChatSessionId,
           content: trimmed,
+          images: imagesToSend,
           model: selectedModel,
           messageHistory,
           workoutSessionId: activeSession?._id,
@@ -262,6 +257,35 @@ export default function WorkoutPage() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+    e.preventDefault();
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setAttachedImages(prev => [...prev, reader.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith("image/"));
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setAttachedImages(prev => [...prev, reader.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    if (e.target) e.target.value = "";
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -308,59 +332,16 @@ export default function WorkoutPage() {
   const lastRestMs = useMemo(() => getLastRestDurationMs(exercises), [exercises]);
   const feedExercises = useMemo(() => mapFeedExercises(exercises), [exercises]);
 
-  const parsedWeight = Number(weight);
-  const parsedReps = Number(reps);
-  const targetExerciseName = (
-    liveTiming?.activeSet?.exerciseName ?? exerciseName
-  ).trim();
-
-  const canStartSet =
-    Boolean(activeSession) &&
-    exerciseName.trim().length > 0 &&
-    !isStartingSet &&
-    !isCompletingSet;
-  const canCompleteSet =
-    Boolean(activeSession) &&
-    targetExerciseName.length > 0 &&
-    Number.isFinite(parsedWeight) &&
-    Number.isFinite(parsedReps) &&
-    parsedWeight > 0 &&
-    parsedReps > 0 &&
-    !isCompletingSet &&
-    !isStartingSet;
-
-  const handleStartSet = async () => {
-    if (!activeSession || !canStartSet) return;
-    setIsStartingSet(true);
+  const handleExitWorkout = async () => {
+    if (!activeSession) return;
+    if (!confirm("Exit and delete this workout session?")) return;
+    setShouldAutoCreateSession(false);
     try {
-      await startSet({
-        sessionId: activeSession._id,
-        exerciseName: exerciseName.trim(),
-      });
-    } catch (error) {
-      console.error("Failed to start set:", error);
-    } finally {
-      setIsStartingSet(false);
+      await removeSession({ sessionId: activeSession._id });
+    } catch (err) {
+      console.error("Failed to delete session:", err);
     }
-  };
-
-  const handleCompleteSet = async () => {
-    if (!activeSession || !canCompleteSet) return;
-    setIsCompletingSet(true);
-    try {
-      await completeSet({
-        sessionId: activeSession._id,
-        exerciseName: targetExerciseName,
-        weight: parsedWeight,
-        reps: parsedReps,
-      });
-      setWeight("");
-      setReps("");
-    } catch (error) {
-      console.error("Failed to complete set:", error);
-    } finally {
-      setIsCompletingSet(false);
-    }
+    router.push("/dashboard");
   };
 
   const handleFinishWorkout = async () => {
@@ -386,6 +367,32 @@ export default function WorkoutPage() {
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleExitWorkout}
+            className="flex items-center justify-center rounded-lg cursor-pointer"
+            style={{
+              width: 36,
+              height: 36,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.4)",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "rgba(255,255,255,0.7)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "rgba(255,255,255,0.4)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+            }}
+            aria-label="Exit workout and delete session"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
           <div
             className="w-2 h-2 rounded-full"
             style={{
@@ -393,6 +400,17 @@ export default function WorkoutPage() {
               animation: "chatPulse 2s ease-in-out infinite",
             }}
           />
+          <span
+            className="text-xs uppercase tracking-widest px-2 py-0.5 rounded-md"
+            style={{
+              fontFamily: "var(--font-mono)",
+              color: "rgba(255,45,45,0.8)",
+              background: "rgba(255,45,45,0.08)",
+              border: "1px solid rgba(255,45,45,0.15)",
+            }}
+          >
+            {activeSession?.type || "General"}
+          </span>
           <span
             className="text-lg tracking-widest"
             style={{
@@ -432,101 +450,31 @@ export default function WorkoutPage() {
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col">
+        {/* Timer status bar */}
         <div
-          className="shrink-0 px-4 py-3 border-b border-white/[0.06] space-y-2"
-          style={{ background: "rgba(255,255,255,0.01)" }}
+          className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
-          <div className="grid grid-cols-12 gap-2">
-            <input
-              value={exerciseName}
-              onChange={(e) => setExerciseName(e.target.value)}
-              placeholder="Exercise name"
-              className="col-span-12 sm:col-span-5 rounded-lg px-3 py-2 text-sm outline-none"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#ebebeb",
-                fontFamily: "var(--font-sans)",
-              }}
-            />
-            <input
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              type="number"
-              inputMode="decimal"
-              min="0"
-              placeholder="Weight"
-              className="col-span-6 sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#ebebeb",
-                fontFamily: "var(--font-sans)",
-              }}
-            />
-            <input
-              value={reps}
-              onChange={(e) => setReps(e.target.value)}
-              type="number"
-              inputMode="numeric"
-              min="0"
-              placeholder="Reps"
-              className="col-span-6 sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#ebebeb",
-                fontFamily: "var(--font-sans)",
-              }}
-            />
-            <button
-              onClick={handleStartSet}
-              disabled={!canStartSet}
-              className="col-span-6 sm:col-span-1 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: "rgba(255,45,45,0.16)",
-                border: "1px solid rgba(255,45,45,0.3)",
-                color: "#ff2d2d",
-                fontFamily: "var(--font-display)",
-              }}
-            >
-              {isStartingSet ? "..." : "Start"}
-            </button>
-            <button
-              onClick={handleCompleteSet}
-              disabled={!canCompleteSet}
-              className="col-span-6 sm:col-span-2 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "rgba(255,255,255,0.85)",
-                fontFamily: "var(--font-display)",
-              }}
-            >
-              {isCompletingSet ? "Logging..." : "Complete Set"}
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-white/45">
-              {activeSession ? `Session ${activeSession._id.slice(-6)}` : "Preparing session..."}
+          {activeSetElapsedMs !== null && liveTiming?.activeSet && (
+            <span className="font-mono text-[10px] text-[#ff2d2d]">
+              Active set {formatDuration(activeSetElapsedMs)} · {liveTiming.activeSet.exerciseName}
             </span>
-            {activeSetElapsedMs !== null && liveTiming?.activeSet && (
-              <span className="font-mono text-[10px] text-[#ff2d2d]">
-                Active set {formatDuration(activeSetElapsedMs)} · {liveTiming.activeSet.exerciseName}
-              </span>
-            )}
-            {activeRestElapsedMs !== null && (
-              <span className="font-mono text-[10px] text-white/60">
-                Rest {formatDuration(activeRestElapsedMs)}
-              </span>
-            )}
-            {activeRestElapsedMs === null && lastRestMs !== null && (
-              <span className="font-mono text-[10px] text-white/40">
-                Last rest {formatDuration(lastRestMs)}
-              </span>
-            )}
-          </div>
+          )}
+          {activeRestElapsedMs !== null && (
+            <span className="font-mono text-[10px] text-white/60">
+              Rest {formatDuration(activeRestElapsedMs)}
+            </span>
+          )}
+          {activeRestElapsedMs === null && lastRestMs !== null && (
+            <span className="font-mono text-[10px] text-white/40">
+              Last rest {formatDuration(lastRestMs)}
+            </span>
+          )}
+          {!activeSetElapsedMs && !activeRestElapsedMs && !lastRestMs && (
+            <span className="font-mono text-[10px] text-white/30">
+              Ready — tell me what you&apos;re lifting
+            </span>
+          )}
         </div>
 
         <div className="flex-1 min-h-0">
@@ -657,6 +605,24 @@ export default function WorkoutPage() {
                       : "0.875rem 0.875rem 0.875rem 0.25rem",
                 }}
               >
+                {msg.role === "user" && msg.images && msg.images.length > 0 && (
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {msg.images.map((img: string, i: number) => (
+                      <img
+                        key={i}
+                        src={img}
+                        alt={`Image ${i + 1}`}
+                        style={{
+                          width: 80,
+                          height: 80,
+                          objectFit: "cover",
+                          borderRadius: 8,
+                          border: "1px solid rgba(255,255,255,0.1)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
                 <p
                   className="text-sm leading-relaxed whitespace-pre-wrap"
                   style={{
@@ -710,12 +676,75 @@ export default function WorkoutPage() {
           className="shrink-0 px-4 py-2.5"
           style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
         >
+          {attachedImages.length > 0 && (
+            <div className="flex gap-2 flex-wrap px-1 pb-2">
+              {attachedImages.map((img, i) => (
+                <div key={i} className="relative group" style={{ width: 48, height: 48 }}>
+                  <img
+                    src={img}
+                    alt={`Attached ${i + 1}`}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      objectFit: "cover",
+                      borderRadius: 8,
+                      border: "1px solid rgba(255,255,255,0.1)",
+                    }}
+                  />
+                  <button
+                    onClick={() => setAttachedImages(prev => prev.filter((_, idx) => idx !== i))}
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -6,
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      background: "rgba(0,0,0,0.8)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      color: "#fff",
+                      fontSize: 10,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isStreaming}
+              aria-label="Attach image"
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleTextareaInput}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               aria-label="Workout chat input"
               placeholder="Log a set or ask for help..."
               disabled={isStreaming || !activeChatSessionId}
@@ -726,7 +755,7 @@ export default function WorkoutPage() {
                 border: "1px solid rgba(255,255,255,0.1)",
                 color: "#ebebeb",
                 fontFamily: "var(--font-sans)",
-                fontSize: "13px",
+                fontSize: "16px",
                 maxHeight: "120px",
               }}
               onFocus={(e) => {
@@ -740,13 +769,13 @@ export default function WorkoutPage() {
               onClick={() => {
                 void handleSend();
               }}
-              disabled={isStreaming || !input.trim() || !activeChatSessionId}
+              disabled={isStreaming || (!input.trim() && attachedImages.length === 0) || !activeChatSessionId}
               aria-label="Send workout message"
               className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
                 background: "#ff2d2d",
                 boxShadow:
-                  input.trim() && !isStreaming
+                  (input.trim() || attachedImages.length > 0) && !isStreaming
                     ? "0 0 12px rgba(255,45,45,0.25)"
                     : "none",
               }}

@@ -6,6 +6,7 @@ interface ChatMessage {
   _id: string;
   role: "user" | "assistant";
   content: string;
+  images?: string[];
   model?: string;
   timestamp: number;
 }
@@ -21,7 +22,7 @@ interface ChatDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   messages: ChatMessage[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, images?: string[]) => void;
   isLoading: boolean;
   selectedModel: string;
   onModelChange: (model: string) => void;
@@ -42,6 +43,12 @@ const MODELS = [
   { label: "GLM-5", value: "z-ai/glm-5" },
   { label: "Kimi K2.5", value: "moonshotai/kimi-k2.5" },
   { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
+];
+
+const NON_VISION_MODELS = [
+  "minimax/minimax-m2.5",
+  "z-ai/glm-5",
+  "deepseek/deepseek-v3.2",
 ];
 
 function getModelLabel(value: string): string {
@@ -111,10 +118,12 @@ export default function ChatDrawer({
   isStreaming,
 }: ChatDrawerProps) {
   const [input, setInput] = useState("");
+  const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom on new messages and streaming
   useEffect(() => {
@@ -135,9 +144,11 @@ export default function ChatDrawer({
 
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
-    onSendMessage(trimmed);
+    const hasImages = attachedImages.length > 0;
+    if ((!trimmed && !hasImages) || isLoading) return;
+    onSendMessage(trimmed, hasImages ? attachedImages : undefined);
     setInput("");
+    setAttachedImages([]);
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -157,6 +168,36 @@ export default function ChatDrawer({
     const el = e.target;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  };
+
+  const readFilesAsDataUrls = (files: FileList | File[]) => {
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setAttachedImages((prev) => [...prev, reader.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = e.clipboardData.files;
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      readFilesAsDataUrls(imageFiles);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      readFilesAsDataUrls(e.target.files);
+    }
+    // Reset so re-selecting the same file works
+    e.target.value = "";
   };
 
   const handleSelectSession = (id: string) => {
@@ -543,6 +584,25 @@ export default function ChatDrawer({
                         : "1rem 1rem 1rem 0.375rem",
                   }}
                 >
+                  {/* User message images */}
+                  {msg.role === "user" && msg.images && msg.images.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5" style={{ marginBottom: msg.content ? "8px" : 0 }}>
+                      {msg.images.map((img, idx) => (
+                        <img
+                          key={idx}
+                          src={img}
+                          alt={`Image ${idx + 1}`}
+                          style={{
+                            width: "80px",
+                            height: "80px",
+                            objectFit: "cover",
+                            borderRadius: "6px",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                   {msg.role === "assistant" ? (
                     <div
                       className="text-sm leading-relaxed"
@@ -555,7 +615,7 @@ export default function ChatDrawer({
                         __html: renderMarkdown(msg.content),
                       }}
                     />
-                  ) : (
+                  ) : msg.content ? (
                     <p
                       className="text-sm leading-relaxed whitespace-pre-wrap"
                       style={{
@@ -566,7 +626,7 @@ export default function ChatDrawer({
                     >
                       {msg.content}
                     </p>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Meta line: model badge + timestamp */}
@@ -650,12 +710,124 @@ export default function ChatDrawer({
           className="shrink-0 px-4 py-3 relative z-20"
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
         >
+          {/* Image preview row */}
+          {attachedImages.length > 0 && (
+            <div style={{ marginBottom: "8px" }}>
+              <div className="flex flex-wrap gap-2">
+                {attachedImages.map((img, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      position: "relative",
+                      width: "48px",
+                      height: "48px",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      background: "rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <img
+                      src={img}
+                      alt={`Attached ${idx + 1}`}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                    <button
+                      onClick={() => setAttachedImages((prev) => prev.filter((_, i) => i !== idx))}
+                      style={{
+                        position: "absolute",
+                        top: "-1px",
+                        right: "-1px",
+                        width: "18px",
+                        height: "18px",
+                        borderRadius: "50%",
+                        background: "rgba(0,0,0,0.7)",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        color: "rgba(255,255,255,0.8)",
+                        fontSize: "11px",
+                        lineHeight: "1",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {/* Vision model warning */}
+              {NON_VISION_MODELS.includes(selectedModel) && (
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    color: "rgba(255,180,50,0.8)",
+                    marginTop: "4px",
+                  }}
+                >
+                  &#9888; This model may not support images
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
+
           <div className="flex items-end gap-2">
+            {/* Attachment button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(255,255,255,0.4)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "rgba(255,45,45,0.3)";
+                e.currentTarget.style.color = "#ff2d2d";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                e.currentTarget.style.color = "rgba(255,255,255,0.4)";
+              }}
+              title="Attach image"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleTextareaInput}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="Log a workout or ask a question..."
               disabled={isLoading}
               rows={1}
@@ -665,7 +837,7 @@ export default function ChatDrawer({
                 border: "1px solid rgba(255,255,255,0.1)",
                 color: "#ebebeb",
                 fontFamily: "var(--font-sans)",
-                fontSize: "14px",
+                fontSize: "16px",
                 maxHeight: "120px",
               }}
               onFocus={(e) => {
@@ -677,12 +849,12 @@ export default function ChatDrawer({
             />
             <button
               onClick={handleSend}
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || (!input.trim() && attachedImages.length === 0)}
               className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
                 background: "#ff2d2d",
                 boxShadow:
-                  input.trim() && !isLoading
+                  (input.trim() || attachedImages.length > 0) && !isLoading
                     ? "0 0 16px rgba(255,45,45,0.25)"
                     : "none",
               }}

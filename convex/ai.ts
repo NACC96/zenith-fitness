@@ -17,29 +17,58 @@ Key rules:
 - If the user doesn't specify a workout type, infer it (bench/incline/flys = Chest, squat/leg press = Legs, etc.)
 - Be concise but friendly. Use the user's data for personalized feedback.
 - Today's date is ${new Date().toISOString().split("T")[0]}
-- You only need to provide ISO dates. Session labels are generated server-side.`;
+- You only need to provide ISO dates. Session labels are generated server-side.
+- You can delete workouts, exercises, and individual sets using the delete tools
+- When asked to delete something, first use getWorkoutHistory to find the exact session, then confirm with the user what you're about to delete before proceeding
+- After deleting, confirm what was removed
+- Users can attach images to their messages. When you receive an image, analyze it and respond helpfully. For gym-related images (form check photos, equipment, nutrition labels), provide relevant fitness advice.`;
 
 function getWorkoutSystemPrompt(workoutSessionId: string): string {
-  return `You are Zenith AI, a live workout assistant. The user is actively working out at the gym right now.
+  return `You are Zenith AI, a live workout assistant. The user is actively working out right now.
+
+WORKFLOW:
+1. When the user says they're starting an exercise (e.g., "starting bench press", "bench press 25lb plates on bar"), use startSet to begin the timer
+2. When the user reports finishing (e.g., "done", "got 12", "12 reps", "finished"), use completeSet to stop the timer and record the set. Rest timer starts automatically.
+3. When the user starts their next set, the rest timer ends automatically
+
+WEIGHT PARSING:
+- "25lb plates on bar" or "25s on the bar" = 95 lbs (45lb standard bar + 2×25lb plates)
+- "a plate" or "plate on each side" = 135 lbs (45lb bar + 2×45lb plates)
+- "135" or "135 lbs" = 135 lbs (exact weight)
+- "two plates" = 225 lbs (45lb bar + 4×45lb plates)
+- If weight is ambiguous, ASK the user to clarify
+- Always assume a standard 45lb barbell unless told otherwise
 
 BEHAVIOR:
-- When the user logs a lift (e.g., "bench 135 for 10"), confirm it concisely: "Got it: Bench Press — 135 lbs × 10 reps ✓"
-- You can answer questions about their workout history, suggest next exercises, give form tips
-- Be encouraging but brief — they're between sets
-- Always use the logExercise tool to record exercises — ALWAYS use the active workout session ID provided
+- Be extremely concise — the user is mid-workout
+- Confirm actions briefly: "Timer started: Bench Press ⏱" or "Got it: Bench Press — 95 lbs × 12 reps ✓"
+- If the user says just a number like "12" after starting a set, that means 12 reps at the same weight context
+- Track the current weight context — if user said "25lb plates" for set 1, assume same weight for subsequent sets unless told otherwise
+- You can also answer questions, suggest exercises, give form tips between sets
 
-ACTIVE SESSION: The current workout session ID is ${workoutSessionId}. ALL exercises should be logged to this session.
+WORKOUT TYPE:
+- After the user's FIRST exercise, automatically call setWorkoutType to categorize the workout
+- Infer the type from the exercise: bench press/flyes/dips → "Chest", squats/leg press/lunges → "Legs", deadlifts/rows/pullups → "Back", overhead press/lateral raises → "Shoulders", curls/tricep extensions → "Arms", etc.
+- For mixed exercises, use broader categories: "Push" (chest+shoulders+triceps), "Pull" (back+biceps), "Upper Body", "Lower Body", "Full Body"
+- Only call setWorkoutType once — on the first exercise. Don't change it mid-workout unless the user explicitly asks.
 
-You have access to these tools:
-- logExercise: Log an exercise set (ALWAYS use sessionId: "${workoutSessionId}")
+ACTIVE SESSION: ${workoutSessionId}. ALL exercises go to this session.
+
+TOOLS:
+- startSet: Start the set timer (use when user begins a set)
+- completeSet: Stop timer, record weight + reps (use when user finishes a set)
+- setWorkoutType: Set the workout type/category for the session (call after first exercise)
+- logExercise: Log completed sets without timing (use for retroactive logging, e.g. "I did 3x10 bench earlier")
 - getWorkoutHistory: Check past workouts
 - getExerciseStats: Get stats for a specific exercise
 - createWorkoutType: Create a new workout type
+- deleteWorkout / deleteExercise / deleteSet: Delete data
 
 Key rules:
 - Weight is always in pounds (lb)
 - Today's date is ${new Date().toISOString().split("T")[0]}
-- Be concise — the user is mid-workout`;
+- When asked to delete, confirm before doing it
+- Users can attach images. Analyze them in workout context.`;
 }
 
 const TOOLS = [
@@ -136,6 +165,141 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "deleteWorkout",
+      description:
+        "Delete an entire workout session and all its exercises. Use sessionId if available, otherwise find by date and type.",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "ISO date YYYY-MM-DD" },
+          type: {
+            type: "string",
+            description: "Workout type (e.g., Chest, Back, Legs)",
+          },
+          sessionId: {
+            type: "string",
+            description: "Workout session ID (if known)",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "deleteExercise",
+      description:
+        "Delete a specific exercise (all sets) from a workout session",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "Workout session ID",
+          },
+          exerciseName: {
+            type: "string",
+            description: "Name of the exercise to delete",
+          },
+        },
+        required: ["sessionId", "exerciseName"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "deleteSet",
+      description:
+        "Delete a specific set from an exercise. Use setIndex -1 to delete the last set.",
+      parameters: {
+        type: "object",
+        properties: {
+          sessionId: {
+            type: "string",
+            description: "Workout session ID",
+          },
+          exerciseName: {
+            type: "string",
+            description: "Name of the exercise",
+          },
+          setIndex: {
+            type: "number",
+            description: "0-based set index, or -1 for the last set",
+          },
+        },
+        required: ["sessionId", "exerciseName", "setIndex"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "setWorkoutType",
+      description:
+        "Set the workout type/category for the current session (e.g., Chest, Back, Legs, Push, Pull, Upper, Lower, Full Body, Arms, Shoulders, Cardio). Call this automatically after the first exercise to categorize the workout.",
+      parameters: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            description:
+              "The workout type (e.g., Chest, Back, Legs, Shoulders, Arms, Push, Pull, Upper Body, Lower Body, Full Body, Cardio)",
+          },
+        },
+        required: ["type"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "startSet",
+      description:
+        "Start the set timer for an exercise. Use this when the user says they're starting/beginning a set. The timer will run until completeSet is called.",
+      parameters: {
+        type: "object",
+        properties: {
+          exerciseName: {
+            type: "string",
+            description: "Exercise name (e.g., Bench Press, Squat)",
+          },
+        },
+        required: ["exerciseName"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "completeSet",
+      description:
+        "Complete the current set, stop the timer, and record weight + reps. Rest timer starts automatically. Use this when the user reports finishing their set.",
+      parameters: {
+        type: "object",
+        properties: {
+          exerciseName: {
+            type: "string",
+            description:
+              "Exercise name (optional if a set is currently active — will use the active set's exercise)",
+          },
+          weight: {
+            type: "number",
+            description:
+              "Weight in pounds (total bar weight including the bar itself, e.g. 45lb bar + 2x25lb plates = 95)",
+          },
+          reps: {
+            type: "number",
+            description: "Number of reps completed",
+          },
+        },
+        required: ["weight", "reps"],
+      },
+    },
+  },
 ];
 
 const encoder = new TextEncoder();
@@ -152,16 +316,47 @@ function sseHeaders() {
 }
 
 export const streamChat = httpAction(async (ctx, request) => {
-  const { sessionId, content, model, messageHistory, workoutSessionId } = await request.json();
+  const { sessionId, content, model, messageHistory, workoutSessionId, images } = await request.json();
 
   const systemPrompt = workoutSessionId
     ? getWorkoutSystemPrompt(workoutSessionId)
     : SYSTEM_PROMPT;
 
+  // Format current user message — multimodal if images attached
+  const userMessage = images && images.length > 0
+    ? {
+        role: "user",
+        content: [
+          { type: "text", text: content },
+          ...images.map((img: string) => ({
+            type: "image_url",
+            image_url: { url: img },
+          })),
+        ],
+      }
+    : { role: "user", content };
+
+  // Format historical messages — multimodal if they had images
+  const formattedHistory = (messageHistory || []).map((m: any) => {
+    if (m.images && m.images.length > 0 && m.role === "user") {
+      return {
+        role: m.role,
+        content: [
+          { type: "text", text: m.content },
+          ...m.images.map((img: string) => ({
+            type: "image_url",
+            image_url: { url: img },
+          })),
+        ],
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
+
   const messages: any[] = [
     { role: "system", content: systemPrompt },
-    ...(messageHistory || []),
-    { role: "user", content },
+    ...formattedHistory,
+    userMessage,
   ];
 
   const mandatoryReasoningModels = [
@@ -311,6 +506,18 @@ export const streamChat = httpAction(async (ctx, request) => {
                   result = await handleGetStats(ctx, toolArgs);
                 } else if (toolName === "createWorkoutType") {
                   result = await handleCreateType(ctx, toolArgs);
+                } else if (toolName === "deleteWorkout") {
+                  result = await handleDeleteWorkout(ctx, toolArgs);
+                } else if (toolName === "deleteExercise") {
+                  result = await handleDeleteExercise(ctx, toolArgs);
+                } else if (toolName === "deleteSet") {
+                  result = await handleDeleteSet(ctx, toolArgs);
+                } else if (toolName === "startSet") {
+                  result = await handleStartSet(ctx, toolArgs, workoutSessionId);
+                } else if (toolName === "completeSet") {
+                  result = await handleCompleteSet(ctx, toolArgs, workoutSessionId);
+                } else if (toolName === "setWorkoutType") {
+                  result = await handleSetWorkoutType(ctx, toolArgs, workoutSessionId);
                 } else {
                   result = JSON.stringify({ error: `Unknown tool: ${toolName}` });
                 }
@@ -529,4 +736,180 @@ async function handleGetStats(ctx: any, args: any): Promise<string> {
 async function handleCreateType(ctx: any, args: any): Promise<string> {
   await ctx.runMutation(api.workoutTypes.create, { name: args.name });
   return JSON.stringify({ success: true, name: args.name });
+}
+
+async function handleDeleteWorkout(ctx: any, args: any): Promise<string> {
+  let sessionId: Id<"workoutSessions">;
+
+  if (args.sessionId) {
+    sessionId = args.sessionId as Id<"workoutSessions">;
+  } else if (args.date || args.type) {
+    const sessions = await ctx.runQuery(api.workoutSessions.listAll);
+    const match = sessions.find(
+      (s: any) =>
+        (!args.date || s.date === args.date) &&
+        (!args.type || s.type.toLowerCase() === args.type.toLowerCase())
+    );
+    if (!match) {
+      return JSON.stringify({
+        error: `No workout session found for date=${args.date}, type=${args.type}`,
+      });
+    }
+    sessionId = match._id;
+  } else {
+    return JSON.stringify({
+      error: "Provide sessionId, or date and/or type to identify the workout",
+    });
+  }
+
+  const session = await ctx.runQuery(api.workoutSessions.getWithExercises, {
+    sessionId,
+  });
+  await ctx.runMutation(api.workoutSessions.remove, { sessionId });
+
+  return JSON.stringify({
+    success: true,
+    deleted: {
+      date: session?.date,
+      type: session?.type,
+      exerciseCount: session?.exercises?.length ?? 0,
+    },
+  });
+}
+
+async function handleDeleteExercise(ctx: any, args: any): Promise<string> {
+  const sessionId = args.sessionId as Id<"workoutSessions">;
+  const session = await ctx.runQuery(api.workoutSessions.getWithExercises, {
+    sessionId,
+  });
+  if (!session) {
+    return JSON.stringify({ error: "Workout session not found" });
+  }
+
+  const exercise = session.exercises.find(
+    (e: any) => e.name.toLowerCase() === args.exerciseName.toLowerCase()
+  );
+  if (!exercise) {
+    return JSON.stringify({
+      error: `Exercise "${args.exerciseName}" not found in this session`,
+      availableExercises: session.exercises.map((e: any) => e.name),
+    });
+  }
+
+  await ctx.runMutation(api.exercises.remove, {
+    exerciseId: exercise._id as Id<"exercises">,
+  });
+
+  return JSON.stringify({
+    success: true,
+    deleted: {
+      exerciseName: exercise.name,
+      setsRemoved: exercise.sets.length,
+    },
+  });
+}
+
+async function handleDeleteSet(ctx: any, args: any): Promise<string> {
+  const sessionId = args.sessionId as Id<"workoutSessions">;
+  const session = await ctx.runQuery(api.workoutSessions.getWithExercises, {
+    sessionId,
+  });
+  if (!session) {
+    return JSON.stringify({ error: "Workout session not found" });
+  }
+
+  const exercise = session.exercises.find(
+    (e: any) => e.name.toLowerCase() === args.exerciseName.toLowerCase()
+  );
+  if (!exercise) {
+    return JSON.stringify({
+      error: `Exercise "${args.exerciseName}" not found in this session`,
+      availableExercises: session.exercises.map((e: any) => e.name),
+    });
+  }
+
+  let setIndex = args.setIndex;
+  if (setIndex === -1) {
+    setIndex = exercise.sets.length - 1;
+  }
+
+  const deletedSet = exercise.sets[setIndex];
+  const result = await ctx.runMutation(api.exercises.removeSet, {
+    exerciseId: exercise._id as Id<"exercises">,
+    setIndex,
+  });
+
+  return JSON.stringify({
+    success: true,
+    deleted: {
+      exerciseName: exercise.name,
+      setIndex,
+      set: deletedSet,
+      exerciseAlsoDeleted: result.deleted === "exercise",
+    },
+  });
+}
+
+async function handleStartSet(ctx: any, args: any, workoutSessionId?: string): Promise<string> {
+  const sessionId = workoutSessionId;
+  if (!sessionId) {
+    return JSON.stringify({ error: "No active workout session" });
+  }
+
+  try {
+    const result = await ctx.runMutation(api.exercises.startSet, {
+      sessionId: sessionId as Id<"workoutSessions">,
+      exerciseName: args.exerciseName,
+    });
+    return JSON.stringify({
+      success: true,
+      exerciseName: args.exerciseName,
+      startedAt: result.startedAt,
+      message: `Timer started for ${args.exerciseName}`,
+    });
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    return JSON.stringify({ error: errorMessage });
+  }
+}
+
+async function handleCompleteSet(ctx: any, args: any, workoutSessionId?: string): Promise<string> {
+  const sessionId = workoutSessionId;
+  if (!sessionId) {
+    return JSON.stringify({ error: "No active workout session" });
+  }
+
+  try {
+    const result = await ctx.runMutation(api.exercises.completeSet, {
+      sessionId: sessionId as Id<"workoutSessions">,
+      ...(args.exerciseName ? { exerciseName: args.exerciseName } : {}),
+      weight: args.weight,
+      reps: args.reps,
+    });
+    return JSON.stringify({
+      success: true,
+      exerciseName: result.exerciseName,
+      weight: args.weight,
+      reps: args.reps,
+      message: `Completed: ${result.exerciseName} — ${args.weight} lbs × ${args.reps} reps. Rest timer started.`,
+    });
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    return JSON.stringify({ error: errorMessage });
+  }
+}
+
+async function handleSetWorkoutType(ctx: any, args: any, workoutSessionId?: string): Promise<string> {
+  if (!workoutSessionId) {
+    return JSON.stringify({ error: "No active workout session" });
+  }
+  const { type } = args;
+  if (!type) {
+    return JSON.stringify({ error: "type is required" });
+  }
+  await ctx.runMutation(api.workoutSessions.updateType, {
+    sessionId: workoutSessionId as any,
+    type,
+  });
+  return JSON.stringify({ success: true, type });
 }

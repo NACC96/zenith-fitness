@@ -8,6 +8,7 @@ interface SessionListProps {
   workouts: WorkoutSession[];
   selectedSession: WorkoutSession | null;
   onSelect: (session: WorkoutSession) => void;
+  onDelete?: (sessionId: string) => void;
   onAddType: () => void;
 }
 
@@ -28,6 +29,7 @@ export default function SessionList({
   workouts,
   selectedSession,
   onSelect,
+  onDelete,
   onAddType,
 }: SessionListProps) {
   const sorted = [...workouts].sort(
@@ -97,7 +99,7 @@ export default function SessionList({
                   : {}),
               }}
             >
-              {/* Top row: date + type badge */}
+              {/* Top row: date + type badge + delete */}
               <div className="flex items-center justify-between mb-2">
                 <span
                   className="text-sm font-semibold"
@@ -115,15 +117,51 @@ export default function SessionList({
                     }
                   )}
                 </span>
-                <span
-                  className="font-mono text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full"
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    color: "rgba(255,255,255,0.5)",
-                  }}
-                >
-                  {workout.type}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="font-mono text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full"
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      color: "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {workout.type}
+                  </span>
+                  {onDelete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!confirm("Delete this workout session and all its exercises?")) return;
+                        onDelete(workout.id);
+                      }}
+                      className="ml-1 flex items-center justify-center rounded-md cursor-pointer"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        color: "rgba(255,255,255,0.3)",
+                        transition: "all 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "#ff2d2d";
+                        e.currentTarget.style.borderColor = "rgba(255,45,45,0.3)";
+                        e.currentTarget.style.background = "rgba(255,45,45,0.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "rgba(255,255,255,0.3)";
+                        e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                        e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                      }}
+                      aria-label="Delete workout"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Stats row */}
