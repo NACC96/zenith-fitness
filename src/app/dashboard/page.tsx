@@ -25,7 +25,7 @@ export default function DashboardPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("google/gemini-3.1-pro-preview");
+  const [selectedModel, setSelectedModel] = useState("anthropic/claude-sonnet-4.6");
   const [modelInitialized, setModelInitialized] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<Id<"chatSessions"> | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
@@ -34,6 +34,9 @@ export default function DashboardPage() {
   const rawWorkouts = useQuery(api.workoutSessions.listAll);
   const workoutTypes = useQuery(api.workoutTypes.list);
   const allWorkouts = (rawWorkouts ?? []) as WorkoutSession[];
+
+  // Workout session deletion
+  const deleteWorkoutSession = useMutation(api.workoutSessions.remove);
 
   // Chat sessions
   const sessions = useQuery(api.chatSessions.list) ?? [];
@@ -72,16 +75,17 @@ export default function DashboardPage() {
     }
   }, [savedModel, modelInitialized]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, images?: string[]) => {
     if (!activeSessionId || isStreaming) return;
 
     // 1. Save user message to DB via mutation
-    await sendMessage({ sessionId: activeSessionId, content, model: selectedModel });
+    await sendMessage({ sessionId: activeSessionId, content, images, model: selectedModel });
 
     // 2. Build message history from recent messages
     const recentMessages = chatMessages.slice(-20).map((m) => ({
       role: m.role,
       content: m.content,
+      ...(m.images ? { images: m.images } : {}),
     }));
 
     // 3. Start streaming
@@ -100,6 +104,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           sessionId: activeSessionId,
           content,
+          images,
           model: selectedModel,
           messageHistory: recentMessages,
         }),
@@ -178,6 +183,17 @@ export default function DashboardPage() {
         const id = await createSession();
         setActiveSessionId(id);
       }
+    }
+  };
+
+  const handleDeleteWorkout = async (sessionId: string) => {
+    try {
+      await deleteWorkoutSession({ sessionId: sessionId as Id<"workoutSessions"> });
+      if (selectedSession?.id === sessionId) {
+        setSelectedSession(null);
+      }
+    } catch (err) {
+      console.error("Failed to delete workout session:", err);
     }
   };
 
@@ -284,6 +300,7 @@ export default function DashboardPage() {
             workouts={filteredSessions}
             selectedSession={selectedSession}
             onSelect={setSelectedSession}
+            onDelete={handleDeleteWorkout}
             onAddType={() => setAddModalOpen(true)}
           />
           <SessionDetail

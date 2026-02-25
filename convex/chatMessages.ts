@@ -18,6 +18,7 @@ export const send = mutation({
   args: {
     sessionId: v.id("chatSessions"),
     content: v.string(),
+    images: v.optional(v.array(v.string())),
     model: v.string(),
   },
   handler: async (ctx, args) => {
@@ -25,6 +26,7 @@ export const send = mutation({
       sessionId: args.sessionId,
       role: "user",
       content: args.content,
+      ...(args.images && args.images.length > 0 ? { images: args.images } : {}),
       timestamp: Date.now(),
     });
     // Update session's updatedAt

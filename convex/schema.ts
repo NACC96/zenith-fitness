@@ -53,6 +53,7 @@ export default defineSchema({
     sessionId: v.optional(v.id("chatSessions")),
     role: v.union(v.literal("user"), v.literal("assistant")),
     content: v.string(),
+    images: v.optional(v.array(v.string())),
     model: v.optional(v.string()),
     timestamp: v.number(),
   }).index("by_session", ["sessionId", "timestamp"]),
