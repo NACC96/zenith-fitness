@@ -30,6 +30,10 @@ export interface WorkoutChatOverlayProps {
 }
 
 const QUICK_CHIPS = ["Log bench press 3×10", "Suggest a push day", "Track my squats"];
+const MAX_ATTACHMENTS = 4;
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function WorkoutChatOverlay({
   isOpen,
@@ -46,11 +50,17 @@ export default function WorkoutChatOverlay({
 }: WorkoutChatOverlayProps) {
   const [input, setInput] = useState("");
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const focusScrollTimeoutRef = useRef<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pendingImageReadsRef = useRef(0);
+  const sendLockRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -88,13 +98,58 @@ export default function WorkoutChatOverlay({
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleEscape = (event: KeyboardEvent) => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      (firstFocusable ?? dialog).focus();
+    });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (element) => element.offsetParent !== null,
+      );
+      if (focusables.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+        if (active === first || !focusables.includes(active ?? first)) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+
+      if (active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      cancelAnimationFrame(rafId);
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [isOpen, onClose]);
 
   useEffect(() => {
@@ -113,43 +168,103 @@ export default function WorkoutChatOverlay({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+  const appendImageFiles = (files: File[]) => {
     if (files.length === 0) return;
-    e.preventDefault();
-    files.forEach((file) => {
+
+    let tooLargeCount = 0;
+    let overLimitCount = 0;
+    let remainingSlots = Math.max(
+      0,
+      MAX_ATTACHMENTS - attachedImages.length - pendingImageReadsRef.current,
+    );
+    const acceptedFiles: File[] = [];
+
+    for (const file of files) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        tooLargeCount += 1;
+        continue;
+      }
+      if (remainingSlots <= 0) {
+        overLimitCount += 1;
+        continue;
+      }
+      acceptedFiles.push(file);
+      remainingSlots -= 1;
+    }
+
+    if (tooLargeCount > 0 && overLimitCount > 0) {
+      setAttachmentNotice(
+        `Some images were skipped (max ${MAX_ATTACHMENTS} attachments, ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB each).`,
+      );
+    } else if (tooLargeCount > 0) {
+      setAttachmentNotice(
+        `Images over ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB were skipped.`,
+      );
+    } else if (overLimitCount > 0) {
+      setAttachmentNotice(`Attachment limit reached (${MAX_ATTACHMENTS} max).`);
+    } else {
+      setAttachmentNotice(null);
+    }
+
+    if (acceptedFiles.length === 0) return;
+    pendingImageReadsRef.current += acceptedFiles.length;
+
+    acceptedFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setAttachedImages((prev) => [...prev, reader.result as string]);
-        }
+        pendingImageReadsRef.current = Math.max(0, pendingImageReadsRef.current - 1);
+        if (typeof reader.result !== "string") return;
+        setAttachedImages((prev) => {
+          if (prev.length >= MAX_ATTACHMENTS) return prev;
+          return [...prev, reader.result as string];
+        });
+      };
+      reader.onerror = () => {
+        pendingImageReadsRef.current = Math.max(0, pendingImageReadsRef.current - 1);
       };
       reader.readAsDataURL(file);
     });
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+    e.preventDefault();
+    appendImageFiles(files);
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith("image/"));
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setAttachedImages((prev) => [...prev, reader.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    appendImageFiles(files);
     if (e.target) e.target.value = "";
   };
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (isInputDisabled || (!trimmed && attachedImages.length === 0)) return;
-    await onSendMessage(trimmed, attachedImages.length > 0 ? attachedImages : undefined);
+    if (isInputDisabled || isSending || sendLockRef.current || (!trimmed && attachedImages.length === 0)) return;
+    const imagesToSend = attachedImages.length > 0 ? attachedImages : undefined;
+    const previousInput = input;
+    const previousImages = attachedImages;
+
+    sendLockRef.current = true;
+    setIsSending(true);
+    setAttachmentNotice(null);
     setInput("");
     setAttachedImages([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+    }
+
+    try {
+      await onSendMessage(trimmed, imagesToSend);
+    } catch (error) {
+      console.error("Failed to send workout message:", error);
+      setInput(previousInput);
+      setAttachedImages(previousImages);
+      setAttachmentNotice("Message failed to send. Please try again.");
+    } finally {
+      sendLockRef.current = false;
+      setIsSending(false);
     }
   };
 
@@ -189,10 +304,10 @@ export default function WorkoutChatOverlay({
             <button
               type="button"
               onClick={() => {
+                fileInputRef.current?.click();
                 onOpen();
-                window.setTimeout(() => fileInputRef.current?.click(), 30);
               }}
-              disabled={isInputDisabled}
+              disabled={isInputDisabled || isSending}
               aria-label="Attach image"
               className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer disabled:opacity-40"
               style={{
@@ -233,7 +348,8 @@ export default function WorkoutChatOverlay({
               type="button"
               onClick={onOpen}
               aria-label="Open chat"
-              className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all"
+              className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-40"
+              disabled={isInputDisabled || isSending}
               style={{
                 background: "#ff2d2d",
                 boxShadow: "0 0 16px rgba(255,45,45,0.3)",
@@ -284,9 +400,11 @@ export default function WorkoutChatOverlay({
             }}
           >
             <div
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
               aria-label="Workout chat"
+              tabIndex={-1}
               className="mx-auto max-w-[860px] rounded-2xl border flex flex-col overflow-hidden"
               style={{
                 maxHeight: "min(76vh, 640px)",
@@ -503,6 +621,15 @@ export default function WorkoutChatOverlay({
                   paddingBottom: "0.625rem",
                 }}
               >
+                {attachmentNotice && (
+                  <p
+                    className="px-1 pb-2 font-mono text-[10px]"
+                    style={{ color: "rgba(255,255,255,0.45)" }}
+                  >
+                    {attachmentNotice}
+                  </p>
+                )}
+
                 {attachedImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap px-1 pb-2">
                     {attachedImages.map((img, index) => (
@@ -520,9 +647,10 @@ export default function WorkoutChatOverlay({
                         />
                         <button
                           type="button"
-                          onClick={() =>
-                            setAttachedImages((prev) => prev.filter((_, idx) => idx !== index))
-                          }
+                          onClick={() => {
+                            setAttachmentNotice(null);
+                            setAttachedImages((prev) => prev.filter((_, idx) => idx !== index));
+                          }}
                           style={{
                             position: "absolute",
                             top: -6,
@@ -551,7 +679,7 @@ export default function WorkoutChatOverlay({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isInputDisabled}
+                    disabled={isInputDisabled || isSending}
                     aria-label="Attach image"
                     className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30"
                     style={{
@@ -619,13 +747,17 @@ export default function WorkoutChatOverlay({
                     onClick={() => {
                       void handleSend();
                     }}
-                    disabled={isInputDisabled || (!input.trim() && attachedImages.length === 0)}
+                    disabled={
+                      isInputDisabled || isSending || (!input.trim() && attachedImages.length === 0)
+                    }
                     aria-label="Send workout message"
                     className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                     style={{
                       background: "#ff2d2d",
                       boxShadow:
-                        (input.trim() || attachedImages.length > 0) && !isInputDisabled
+                        (input.trim() || attachedImages.length > 0) &&
+                        !isInputDisabled &&
+                        !isSending
                           ? "0 0 12px rgba(255,45,45,0.25)"
                           : "none",
                     }}

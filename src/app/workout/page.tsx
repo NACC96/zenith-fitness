@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
@@ -68,6 +68,7 @@ function mapFeedExercises(exercises: ExerciseDoc[]): FeedExercise[] {
 
 export default function WorkoutPage() {
   const router = useRouter();
+  const isSendingRef = useRef(false);
   const [activeChatSessionId, setActiveChatSessionId] = useState<Id<"chatSessions"> | null>(null);
   const [creatingChatSession, setCreatingChatSession] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -165,8 +166,18 @@ export default function WorkoutPage() {
 
   const handleSend = async (content: string, images?: string[]) => {
     const trimmed = content.trim();
-    if ((!trimmed && (!images || images.length === 0)) || isStreaming || !activeChatSessionId) return;
+    if (
+      (!trimmed && (!images || images.length === 0)) ||
+      isStreaming ||
+      isSendingRef.current ||
+      !activeChatSessionId
+    ) {
+      return;
+    }
     const imagesToSend = images && images.length > 0 ? images : undefined;
+    isSendingRef.current = true;
+    setIsStreaming(true);
+    setStreamingContent("");
 
     try {
       await sendChatMessage({
@@ -181,9 +192,6 @@ export default function WorkoutPage() {
         content: message.content,
         ...(message.images ? { images: message.images } : {}),
       }));
-
-      setIsStreaming(true);
-      setStreamingContent("");
 
       const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
       const baseUrl =
@@ -210,8 +218,9 @@ export default function WorkoutPage() {
       const decoder = new TextDecoder();
       let buffer = "";
       let accumulated = "";
+      let shouldStop = false;
 
-      while (true) {
+      while (!shouldStop) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -238,6 +247,7 @@ export default function WorkoutPage() {
               continue;
             }
             if (parsed.done || parsed.error) {
+              shouldStop = true;
               break;
             }
           } catch {
@@ -245,9 +255,14 @@ export default function WorkoutPage() {
           }
         }
       }
+
+      if (shouldStop) {
+        await reader.cancel().catch(() => {});
+      }
     } catch (error) {
       console.error("Workout chat streaming failed:", error);
     } finally {
+      isSendingRef.current = false;
       setIsStreaming(false);
       setStreamingContent("");
     }
@@ -389,6 +404,8 @@ export default function WorkoutPage() {
             aria-label="Exit workout and delete session"
           >
             <svg
+              aria-hidden="true"
+              focusable="false"
               width="18"
               height="18"
               viewBox="0 0 24 24"
