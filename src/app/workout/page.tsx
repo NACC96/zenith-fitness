@@ -361,7 +361,7 @@ export default function WorkoutPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-[100dvh]" style={{ background: "#0a0a0a" }}>
+    <div className="flex flex-col h-[100dvh] overflow-hidden" style={{ background: "#0a0a0a" }}>
       <div
         className="shrink-0 flex items-center justify-between px-4 py-3"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
@@ -477,7 +477,7 @@ export default function WorkoutPage() {
           )}
         </div>
 
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 flex flex-col">
           <ActiveExerciseFeed
             exercises={feedExercises}
             activeSet={
