@@ -6,7 +6,12 @@ import { motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import ActiveExerciseFeed from "@/components/ActiveExerciseFeed";
+import WorkoutFocusPanel, { type WorkoutFocusState } from "@/components/WorkoutFocusPanel";
+import WorkoutExerciseHistorySheet from "@/components/WorkoutExerciseHistorySheet";
+import type { FeedExercise, LatestCompletedSet } from "@/components/workout/types";
+import { formatDuration } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 const MODELS = [
   { label: "Gemini 3.1 Pro", value: "google/gemini-3.1-pro-preview" },
@@ -33,17 +38,6 @@ type ExerciseDoc = {
   sets: TimedSet[];
 };
 
-function formatTimer(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function formatDuration(ms: number): string {
-  const clamped = Math.max(0, ms);
-  return formatTimer(Math.floor(clamped / 1000));
-}
-
 function getLastRestDurationMs(exercises: ExerciseDoc[]): number | null {
   let latestRestStartedAt = -1;
   let latestRestDuration: number | null = null;
@@ -61,7 +55,7 @@ function getLastRestDurationMs(exercises: ExerciseDoc[]): number | null {
   return latestRestDuration;
 }
 
-function mapFeedExercises(exercises: ExerciseDoc[]) {
+function mapFeedExercises(exercises: ExerciseDoc[]): FeedExercise[] {
   return exercises.map((exercise) => ({
     name: exercise.name,
     sets: exercise.sets.map((set, index) => ({
@@ -84,7 +78,10 @@ export default function WorkoutPage() {
   const [requestingSession, setRequestingSession] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [viewportHeightPx, setViewportHeightPx] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const focusScrollTimeoutRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,13 +99,12 @@ export default function WorkoutPage() {
     api.workoutSessions.getLiveTimingState,
     activeSession ? { sessionId: activeSession._id } : "skip",
   );
-  const chatMessages =
-    useQuery(
-      api.chatMessages.list,
-      activeChatSessionId ? { sessionId: activeChatSessionId } : "skip",
-    ) ?? [];
-
-  const exercises = (exercisesRaw ?? []) as ExerciseDoc[];
+  const chatMessagesRaw = useQuery(
+    api.chatMessages.list,
+    activeChatSessionId ? { sessionId: activeChatSessionId } : "skip",
+  );
+  const chatMessages = useMemo(() => chatMessagesRaw ?? [], [chatMessagesRaw]);
+  const exercises = useMemo(() => (exercisesRaw ?? []) as ExerciseDoc[], [exercisesRaw]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -118,8 +114,50 @@ export default function WorkoutPage() {
   }, []);
 
   useEffect(() => {
+    const visualViewport = window.visualViewport;
+    let rafId = 0;
+
+    const updateViewportHeight = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        const nextHeight = Math.max(
+          320,
+          Math.round(visualViewport?.height ?? window.innerHeight),
+        );
+        setViewportHeightPx((prev) => (prev === nextHeight ? prev : nextHeight));
+      });
+    };
+
+    updateViewportHeight();
+    visualViewport?.addEventListener("resize", updateViewportHeight);
+    visualViewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("orientationchange", updateViewportHeight);
+
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      visualViewport?.removeEventListener("resize", updateViewportHeight);
+      visualViewport?.removeEventListener("scroll", updateViewportHeight);
+      window.removeEventListener("orientationchange", updateViewportHeight);
+    };
+  }, []);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, streamingContent]);
+
+  useEffect(() => {
+    return () => {
+      if (focusScrollTimeoutRef.current !== null) {
+        window.clearTimeout(focusScrollTimeoutRef.current);
+        focusScrollTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!shouldAutoCreateSession || activeSession !== null || requestingSession) return;
@@ -331,11 +369,66 @@ export default function WorkoutPage() {
     : null;
   const lastRestMs = useMemo(() => getLastRestDurationMs(exercises), [exercises]);
   const feedExercises = useMemo(() => mapFeedExercises(exercises), [exercises]);
+  const totalSetCount = useMemo(
+    () => feedExercises.reduce((sum, exercise) => sum + exercise.sets.length, 0),
+    [feedExercises],
+  );
+  const totalVolume = useMemo(
+    () =>
+      feedExercises.reduce(
+        (sum, exercise) =>
+          sum +
+          exercise.sets.reduce((exerciseSum, set) => exerciseSum + set.weight * set.reps, 0),
+        0,
+      ),
+    [feedExercises],
+  );
+  const latestCompletedSet = useMemo<LatestCompletedSet | null>(() => {
+    let latest: LatestCompletedSet | null = null;
+    for (const exercise of feedExercises) {
+      for (const set of exercise.sets) {
+        if (set.endedAt === undefined) continue;
+        if (!latest || (latest.endedAt ?? -1) < set.endedAt) {
+          latest = {
+            exerciseName: exercise.name,
+            setNumber: set.setNumber,
+            weight: set.weight,
+            reps: set.reps,
+            endedAt: set.endedAt,
+          };
+        }
+      }
+    }
+
+    if (latest) return latest;
+
+    if (feedExercises.length === 0) return null;
+    const fallbackExercise = feedExercises[feedExercises.length - 1];
+    const fallbackSet = fallbackExercise.sets[fallbackExercise.sets.length - 1];
+    if (!fallbackSet) return null;
+
+    return {
+      exerciseName: fallbackExercise.name,
+      setNumber: fallbackSet.setNumber,
+      weight: fallbackSet.weight,
+      reps: fallbackSet.reps,
+      endedAt: fallbackSet.endedAt ?? null,
+    };
+  }, [feedExercises]);
+  const focusState: WorkoutFocusState = useMemo(() => {
+    if (liveTiming?.activeSet) return "activeSet";
+    if (activeRestElapsedMs !== null) return "rest";
+    if (totalSetCount > 0) return "ready";
+    return "empty";
+  }, [liveTiming?.activeSet, activeRestElapsedMs, totalSetCount]);
+  const activeExerciseName =
+    liveTiming?.activeSet?.exerciseName ?? latestCompletedSet?.exerciseName ?? null;
 
   const handleExitWorkout = async () => {
     if (!activeSession) return;
     if (!confirm("Exit and delete this workout session?")) return;
     setShouldAutoCreateSession(false);
+    setIsHistoryOpen(false);
     try {
       await removeSession({ sessionId: activeSession._id });
     } catch (err) {
@@ -348,6 +441,7 @@ export default function WorkoutPage() {
     if (isFinishingWorkout) return;
     setIsFinishingWorkout(true);
     setShouldAutoCreateSession(false);
+    setIsHistoryOpen(false);
     try {
       if (activeSession) {
         await finishActiveSession({ sessionId: activeSession._id });
@@ -361,7 +455,13 @@ export default function WorkoutPage() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-hidden" style={{ background: "#0a0a0a" }}>
+    <div
+      className="flex flex-col overflow-hidden"
+      style={{
+        background: "#0a0a0a",
+        height: viewportHeightPx ? `${viewportHeightPx}px` : "100dvh",
+      }}
+    >
       <div
         className="shrink-0 flex items-center justify-between px-4 py-3"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
@@ -449,49 +549,19 @@ export default function WorkoutPage() {
         </motion.button>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col">
-        {/* Timer status bar */}
-        <div
-          className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
-        >
-          {activeSetElapsedMs !== null && liveTiming?.activeSet && (
-            <span className="font-mono text-[10px] text-[#ff2d2d]">
-              Active set {formatDuration(activeSetElapsedMs)} · {liveTiming.activeSet.exerciseName}
-            </span>
-          )}
-          {activeRestElapsedMs !== null && (
-            <span className="font-mono text-[10px] text-white/60">
-              Rest {formatDuration(activeRestElapsedMs)}
-            </span>
-          )}
-          {activeRestElapsedMs === null && lastRestMs !== null && (
-            <span className="font-mono text-[10px] text-white/40">
-              Last rest {formatDuration(lastRestMs)}
-            </span>
-          )}
-          {!activeSetElapsedMs && !activeRestElapsedMs && !lastRestMs && (
-            <span className="font-mono text-[10px] text-white/30">
-              Ready — tell me what you&apos;re lifting
-            </span>
-          )}
-        </div>
-
-        <div className="flex-1 min-h-0 flex flex-col">
-          <ActiveExerciseFeed
-            exercises={feedExercises}
-            activeSet={
-              liveTiming?.activeSet
-                ? {
-                    exerciseName: liveTiming.activeSet.exerciseName,
-                    elapsedMs: activeSetElapsedMs ?? 0,
-                  }
-                : null
-            }
-            activeRestMs={activeRestElapsedMs}
-            lastRestMs={lastRestMs}
-          />
-        </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <WorkoutFocusPanel
+          focusState={focusState}
+          activeExerciseName={activeExerciseName}
+          activeSetElapsedMs={activeSetElapsedMs}
+          activeRestMs={activeRestElapsedMs}
+          lastRestMs={lastRestMs}
+          latestCompletedSet={latestCompletedSet}
+          exerciseCount={feedExercises.length}
+          totalSetCount={totalSetCount}
+          totalVolume={totalVolume}
+          onOpenHistory={() => setIsHistoryOpen(true)}
+        />
       </div>
 
       <div
@@ -673,8 +743,11 @@ export default function WorkoutPage() {
         </div>
 
         <div
-          className="shrink-0 px-4 py-2.5"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
+          className="shrink-0 px-4 pt-2.5"
+          style={{
+            borderTop: "1px solid rgba(255,255,255,0.04)",
+            paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))",
+          }}
         >
           {attachedImages.length > 0 && (
             <div className="flex gap-2 flex-wrap px-1 pb-2">
@@ -760,9 +833,23 @@ export default function WorkoutPage() {
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "rgba(255,45,45,0.4)";
+                if (focusScrollTimeoutRef.current !== null) {
+                  window.clearTimeout(focusScrollTimeoutRef.current);
+                }
+                focusScrollTimeoutRef.current = window.setTimeout(() => {
+                  messagesEndRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "end",
+                  });
+                  focusScrollTimeoutRef.current = null;
+                }, 140);
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                if (focusScrollTimeoutRef.current !== null) {
+                  window.clearTimeout(focusScrollTimeoutRef.current);
+                  focusScrollTimeoutRef.current = null;
+                }
               }}
             />
             <button
@@ -797,6 +884,15 @@ export default function WorkoutPage() {
           </div>
         </div>
       </div>
+
+      <WorkoutExerciseHistorySheet
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        exercises={feedExercises}
+        activeExerciseName={activeExerciseName}
+        totalSetCount={totalSetCount}
+        totalVolume={totalVolume}
+      />
     </div>
   );
 }

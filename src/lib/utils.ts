@@ -29,3 +29,14 @@ export function formatNum(n: number, decimals = 0): string {
     maximumFractionDigits: decimals,
   });
 }
+
+/**
+ * Format a duration in milliseconds as zero-padded mm:ss.
+ * Minutes are intentionally unbounded (for example, 90 minutes -> "90:00").
+ */
+export function formatDuration(ms: number): string {
+  const safeMs = Math.max(0, ms);
+  const minutes = Math.floor(safeMs / 60000);
+  const seconds = Math.floor((safeMs % 60000) / 1000);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
