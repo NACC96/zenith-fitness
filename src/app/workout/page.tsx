@@ -8,6 +8,9 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import WorkoutFocusPanel, { type WorkoutFocusState } from "@/components/WorkoutFocusPanel";
 import WorkoutExerciseHistorySheet from "@/components/WorkoutExerciseHistorySheet";
+import { formatDuration } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 const MODELS = [
   { label: "Gemini 3.1 Pro", value: "google/gemini-3.1-pro-preview" },
@@ -47,17 +50,6 @@ type LatestCompletedSet = {
   reps: number;
   endedAt: number | null;
 };
-
-function formatTimer(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function formatDuration(ms: number): string {
-  const clamped = Math.max(0, ms);
-  return formatTimer(Math.floor(clamped / 1000));
-}
 
 function getLastRestDurationMs(exercises: ExerciseDoc[]): number | null {
   let latestRestStartedAt = -1;
@@ -892,7 +884,7 @@ export default function WorkoutPage() {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         exercises={feedExercises}
-        activeExerciseName={liveTiming?.activeSet?.exerciseName ?? null}
+        activeExerciseName={activeExerciseName}
         totalSetCount={totalSetCount}
         totalVolume={totalVolume}
       />

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatNum } from "@/lib/utils";
+import { formatDuration, formatNum } from "@/lib/utils";
 
 export type WorkoutFocusState = "activeSet" | "rest" | "ready" | "empty";
 
@@ -23,13 +23,6 @@ export interface WorkoutFocusPanelProps {
   totalSetCount: number;
   totalVolume: number;
   onOpenHistory: () => void;
-}
-
-function formatDuration(ms: number): string {
-  const safeMs = Math.max(0, ms);
-  const minutes = Math.floor(safeMs / 60000);
-  const seconds = Math.floor((safeMs % 60000) / 1000);
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function getStateLabel(state: WorkoutFocusState): string {

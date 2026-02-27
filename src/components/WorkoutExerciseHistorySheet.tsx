@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Portal from "@/components/Portal";
-import { formatNum } from "@/lib/utils";
+import { formatDuration, formatNum } from "@/lib/utils";
 
 type FeedSet = {
   setNumber: number;
@@ -26,13 +26,6 @@ export interface WorkoutExerciseHistorySheetProps {
   activeExerciseName: string | null;
   totalSetCount: number;
   totalVolume: number;
-}
-
-function formatDuration(ms: number): string {
-  const safeMs = Math.max(0, ms);
-  const minutes = Math.floor(safeMs / 60000);
-  const seconds = Math.floor((safeMs % 60000) / 1000);
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export default function WorkoutExerciseHistorySheet({
@@ -77,6 +70,7 @@ export default function WorkoutExerciseHistorySheet({
         exercise,
         volume,
         isActive,
+        detailsId: `exercise-history-details-${index}`,
       };
     });
   }, [activeExerciseName, exercises]);
@@ -133,7 +127,19 @@ export default function WorkoutExerciseHistorySheet({
               }}
               aria-label="Close exercise history"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="img"
+                aria-labelledby="exercise-history-close-icon-title"
+              >
+                <title id="exercise-history-close-icon-title">Close exercise history</title>
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -150,7 +156,7 @@ export default function WorkoutExerciseHistorySheet({
               </div>
             ) : (
               <div className="space-y-2">
-                {listRows.map(({ rowKey, exercise, volume, isActive }) => {
+                {listRows.map(({ rowKey, exercise, volume, isActive, detailsId }) => {
                   const isExpanded = expandedRows[rowKey] ?? false;
                   const setCount = exercise.sets.length;
 
@@ -171,6 +177,8 @@ export default function WorkoutExerciseHistorySheet({
                             [rowKey]: !isExpanded,
                           }));
                         }}
+                        aria-expanded={isExpanded}
+                        aria-controls={detailsId}
                         className="w-full px-3 py-3 flex items-center justify-between gap-3 text-left cursor-pointer"
                       >
                         <div className="min-w-0 flex items-center gap-2">
@@ -200,6 +208,9 @@ export default function WorkoutExerciseHistorySheet({
 
                       {isExpanded && (
                         <div
+                          id={detailsId}
+                          role="region"
+                          aria-label={`${exercise.name} set details`}
                           className="px-3 pb-3 flex flex-wrap gap-1.5"
                           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
                         >
