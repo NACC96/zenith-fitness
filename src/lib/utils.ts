@@ -30,7 +30,10 @@ export function formatNum(n: number, decimals = 0): string {
   });
 }
 
-/** Format a duration in milliseconds as zero-padded mm:ss */
+/**
+ * Format a duration in milliseconds as zero-padded mm:ss.
+ * Minutes are intentionally unbounded (for example, 90 minutes -> "90:00").
+ */
 export function formatDuration(ms: number): string {
   const safeMs = Math.max(0, ms);
   const minutes = Math.floor(safeMs / 60000);

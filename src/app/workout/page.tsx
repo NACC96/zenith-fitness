@@ -8,6 +8,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import WorkoutFocusPanel, { type WorkoutFocusState } from "@/components/WorkoutFocusPanel";
 import WorkoutExerciseHistorySheet from "@/components/WorkoutExerciseHistorySheet";
+import type { FeedExercise, LatestCompletedSet } from "@/components/workout/types";
 import { formatDuration } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -35,20 +36,6 @@ type ExerciseDoc = {
   _id: Id<"exercises">;
   name: string;
   sets: TimedSet[];
-};
-
-type FeedSet = TimedSet & { setNumber: number };
-type FeedExercise = {
-  name: string;
-  sets: FeedSet[];
-};
-
-type LatestCompletedSet = {
-  exerciseName: string;
-  setNumber: number;
-  weight: number;
-  reps: number;
-  endedAt: number | null;
 };
 
 function getLastRestDurationMs(exercises: ExerciseDoc[]): number | null {
@@ -94,6 +81,7 @@ export default function WorkoutPage() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [viewportHeightPx, setViewportHeightPx] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const focusScrollTimeoutRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -161,6 +149,15 @@ export default function WorkoutPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, streamingContent]);
+
+  useEffect(() => {
+    return () => {
+      if (focusScrollTimeoutRef.current !== null) {
+        window.clearTimeout(focusScrollTimeoutRef.current);
+        focusScrollTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!shouldAutoCreateSession || activeSession !== null || requestingSession) return;
@@ -836,15 +833,23 @@ export default function WorkoutPage() {
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = "rgba(255,45,45,0.4)";
-                setTimeout(() => {
+                if (focusScrollTimeoutRef.current !== null) {
+                  window.clearTimeout(focusScrollTimeoutRef.current);
+                }
+                focusScrollTimeoutRef.current = window.setTimeout(() => {
                   messagesEndRef.current?.scrollIntoView({
                     behavior: "smooth",
                     block: "end",
                   });
+                  focusScrollTimeoutRef.current = null;
                 }, 140);
               }}
               onBlur={(e) => {
                 e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                if (focusScrollTimeoutRef.current !== null) {
+                  window.clearTimeout(focusScrollTimeoutRef.current);
+                  focusScrollTimeoutRef.current = null;
+                }
               }}
             />
             <button

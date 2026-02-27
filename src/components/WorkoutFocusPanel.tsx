@@ -1,16 +1,9 @@
 "use client";
 
+import type { LatestCompletedSet } from "@/components/workout/types";
 import { formatDuration, formatNum } from "@/lib/utils";
 
 export type WorkoutFocusState = "activeSet" | "rest" | "ready" | "empty";
-
-type LatestCompletedSet = {
-  exerciseName: string;
-  setNumber: number;
-  weight: number;
-  reps: number;
-  endedAt: number | null;
-};
 
 export interface WorkoutFocusPanelProps {
   focusState: WorkoutFocusState;

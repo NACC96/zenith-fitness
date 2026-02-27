@@ -2,22 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Portal from "@/components/Portal";
+import type { FeedExercise } from "@/components/workout/types";
 import { formatDuration, formatNum } from "@/lib/utils";
-
-type FeedSet = {
-  setNumber: number;
-  weight: number;
-  reps: number;
-  startedAt?: number;
-  endedAt?: number;
-  restStartedAt?: number;
-  restEndedAt?: number;
-};
-
-type FeedExercise = {
-  name: string;
-  sets: FeedSet[];
-};
 
 export interface WorkoutExerciseHistorySheetProps {
   isOpen: boolean;

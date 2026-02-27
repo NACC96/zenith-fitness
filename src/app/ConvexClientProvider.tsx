@@ -17,6 +17,8 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
         style={{ color: "rgba(255,255,255,0.78)" }}
       >
         <div
+          role="alert"
+          aria-live="assertive"
           className="max-w-[520px] w-full rounded-2xl p-5 text-center"
           style={{
             background: "rgba(255,255,255,0.03)",
@@ -24,9 +26,9 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
             backdropFilter: "blur(10px)",
           }}
         >
-          <p className="font-mono text-xs uppercase tracking-widest text-white/45 mb-2">
+          <h1 className="font-mono text-xs uppercase tracking-widest text-white/45 mb-2">
             Missing Environment Variable
-          </p>
+          </h1>
           <p className="text-sm leading-relaxed">
             `NEXT_PUBLIC_CONVEX_URL` is not configured. Add it in your deployment environment
             to enable workout and chat data.
