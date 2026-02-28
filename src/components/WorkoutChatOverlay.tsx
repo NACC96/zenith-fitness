@@ -59,8 +59,14 @@ export default function WorkoutChatOverlay({
   const focusScrollTimeoutRef = useRef<number | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const shouldRestoreFocusRef = useRef(false);
   const pendingImageReadsRef = useRef(0);
   const sendLockRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -89,9 +95,16 @@ export default function WorkoutChatOverlay({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
-    previousFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!isOpen) {
+      if (shouldRestoreFocusRef.current) {
+        shouldRestoreFocusRef.current = false;
+        previousFocusRef.current?.focus();
+      }
+      return;
+    }
+
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    shouldRestoreFocusRef.current = true;
 
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -103,7 +116,7 @@ export default function WorkoutChatOverlay({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -139,9 +152,8 @@ export default function WorkoutChatOverlay({
     return () => {
       cancelAnimationFrame(rafId);
       document.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   useEffect(() => {
     return () => {

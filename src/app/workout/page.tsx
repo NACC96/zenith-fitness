@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
@@ -375,6 +375,14 @@ export default function WorkoutPage() {
     }
   };
 
+  const openChat = useCallback(() => {
+    setIsChatOpen(true);
+  }, []);
+
+  const closeChat = useCallback(() => {
+    setIsChatOpen(false);
+  }, []);
+
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden" style={{ background: "#0a0a0a" }}>
       <div
@@ -499,8 +507,8 @@ export default function WorkoutPage() {
 
       <WorkoutChatOverlay
         isOpen={isChatOpen}
-        onOpen={() => setIsChatOpen(true)}
-        onClose={() => setIsChatOpen(false)}
+        onOpen={openChat}
+        onClose={closeChat}
         messages={chatMessages}
         isStreaming={isStreaming}
         streamingContent={streamingContent}
