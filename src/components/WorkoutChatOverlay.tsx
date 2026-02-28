@@ -391,7 +391,7 @@ export default function WorkoutChatOverlay({
             type="button"
             className="absolute inset-0"
             aria-label="Close chat overlay"
-            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)" }}
+            style={{ background: "transparent", backdropFilter: "none" }}
             onClick={onClose}
           />
 
