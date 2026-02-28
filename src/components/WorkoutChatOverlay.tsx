@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Portal from "@/components/Portal";
 
 export type WorkoutChatMessage = {
@@ -29,13 +29,90 @@ export interface WorkoutChatOverlayProps {
   isInputDisabled: boolean;
 }
 
+type WorkoutChatMessageRowProps = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  images?: string[];
+};
+
 const QUICK_CHIPS = ["Log bench press 3×10", "Suggest a push day", "Track my squats"];
 const MAX_ATTACHMENTS = 4;
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const NEAR_BOTTOM_THRESHOLD_PX = 120;
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function WorkoutChatOverlay({
+function areImagesEqual(a?: string[], b?: string[]) {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
+}
+
+const WorkoutChatMessageRow = memo(
+  function WorkoutChatMessageRow({ role, content, images }: WorkoutChatMessageRowProps) {
+    return (
+      <div className={`flex flex-col ${role === "user" ? "items-end" : "items-start"}`}>
+        <div
+          className="max-w-[85%] px-3 py-2.5"
+          style={{
+            background: role === "user" ? "rgba(255,45,45,0.08)" : "rgba(255,255,255,0.04)",
+            border:
+              role === "user"
+                ? "1px solid rgba(255,45,45,0.15)"
+                : "1px solid rgba(255,255,255,0.06)",
+            borderRadius:
+              role === "user"
+                ? "0.875rem 0.875rem 0.25rem 0.875rem"
+                : "0.875rem 0.875rem 0.875rem 0.25rem",
+          }}
+        >
+          {role === "user" && images && images.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {images.map((img: string, index: number) => (
+                <img
+                  key={index}
+                  src={img}
+                  alt={`Image ${index + 1}`}
+                  style={{
+                    width: 80,
+                    height: 80,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          <p
+            className="text-sm leading-relaxed whitespace-pre-wrap"
+            style={{
+              color: role === "user" ? "#ebebeb" : "rgba(255,255,255,0.8)",
+              fontFamily: "var(--font-sans)",
+              fontSize: "13px",
+            }}
+          >
+            {content}
+          </p>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.role === next.role &&
+    prev.content === next.content &&
+    areImagesEqual(prev.images, next.images),
+);
+
+WorkoutChatMessageRow.displayName = "WorkoutChatMessageRow";
+
+function WorkoutChatOverlayImpl({
   isOpen,
   onOpen,
   onClose,
@@ -53,10 +130,14 @@ export default function WorkoutChatOverlay({
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [keyboardInset, setKeyboardInset] = useState(0);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const focusScrollTimeoutRef = useRef<number | null>(null);
+  const streamScrollRafRef = useRef<number | null>(null);
+  const previousMessageCountRef = useRef(0);
+  const previousStreamingLengthRef = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const shouldRestoreFocusRef = useRef(false);
@@ -64,14 +145,70 @@ export default function WorkoutChatOverlay({
   const sendLockRef = useRef(false);
   const onCloseRef = useRef(onClose);
 
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
+
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const distanceFromBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+    return distanceFromBottom <= NEAR_BOTTOM_THRESHOLD_PX;
+  }, []);
+
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
+    if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+      performance.mark(isOpen ? "workout-chat-open-visible" : "workout-chat-close-visible");
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [isOpen, messages, isStreaming, streamingContent]);
+    previousMessageCountRef.current = messages.length;
+    previousStreamingLengthRef.current = streamingContent.length;
+    scrollToBottom("auto");
+  }, [isOpen, messages.length, scrollToBottom, streamingContent.length]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      previousMessageCountRef.current = messages.length;
+      return;
+    }
+
+    if (messages.length > previousMessageCountRef.current) {
+      scrollToBottom(previousMessageCountRef.current > 0 ? "smooth" : "auto");
+    }
+    previousMessageCountRef.current = messages.length;
+  }, [isOpen, messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    const streamingLength = streamingContent.length;
+
+    if (!isOpen || !isStreaming) {
+      previousStreamingLengthRef.current = streamingLength;
+      return;
+    }
+
+    if (streamingLength <= previousStreamingLengthRef.current) {
+      previousStreamingLengthRef.current = streamingLength;
+      return;
+    }
+
+    previousStreamingLengthRef.current = streamingLength;
+    if (!isNearBottom()) return;
+    if (streamScrollRafRef.current !== null) return;
+
+    streamScrollRafRef.current = window.requestAnimationFrame(() => {
+      streamScrollRafRef.current = null;
+      if (isNearBottom()) {
+        scrollToBottom("auto");
+      }
+    });
+  }, [isNearBottom, isOpen, isStreaming, scrollToBottom, streamingContent.length]);
 
   useEffect(() => {
     const syncKeyboardInset = () => {
@@ -161,8 +298,26 @@ export default function WorkoutChatOverlay({
         window.clearTimeout(focusScrollTimeoutRef.current);
         focusScrollTimeoutRef.current = null;
       }
+      if (streamScrollRafRef.current !== null) {
+        window.cancelAnimationFrame(streamScrollRafRef.current);
+        streamScrollRafRef.current = null;
+      }
     };
   }, []);
+
+  const renderedMessages = useMemo(
+    () =>
+      messages.map((msg) => (
+        <WorkoutChatMessageRow
+          key={msg._id}
+          id={msg._id}
+          role={msg.role}
+          content={msg.content}
+          images={msg.images}
+        />
+      )),
+    [messages],
+  );
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -408,11 +563,10 @@ export default function WorkoutChatOverlay({
               aria-modal="true"
               aria-label="Workout chat"
               tabIndex={-1}
-              className="mx-auto max-w-[860px] max-h-[50dvh] md:max-h-[min(76vh,640px)] rounded-2xl border flex flex-col overflow-hidden"
+              className="mx-auto max-w-[860px] max-h-[50dvh] md:max-h-[min(76vh,640px)] rounded-2xl border flex flex-col overflow-hidden backdrop-blur-none md:backdrop-blur-xl"
               style={{
                 background: "rgba(10,10,10,0.96)",
                 borderColor: "rgba(255,255,255,0.1)",
-                backdropFilter: "blur(22px)",
                 boxShadow: "0 -16px 48px rgba(0,0,0,0.5)",
               }}
             >
@@ -488,7 +642,7 @@ export default function WorkoutChatOverlay({
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
                 {messages.length === 0 && !isStreaming && (
                   <div className="flex flex-col items-center justify-center h-full gap-2">
                     <p
@@ -526,59 +680,7 @@ export default function WorkoutChatOverlay({
                   </div>
                 )}
 
-                {messages.map((msg) => (
-                  <div
-                    key={msg._id}
-                    className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
-                  >
-                    <div
-                      className="max-w-[85%] px-3 py-2.5"
-                      style={{
-                        background:
-                          msg.role === "user"
-                            ? "rgba(255,45,45,0.08)"
-                            : "rgba(255,255,255,0.04)",
-                        border:
-                          msg.role === "user"
-                            ? "1px solid rgba(255,45,45,0.15)"
-                            : "1px solid rgba(255,255,255,0.06)",
-                        borderRadius:
-                          msg.role === "user"
-                            ? "0.875rem 0.875rem 0.25rem 0.875rem"
-                            : "0.875rem 0.875rem 0.875rem 0.25rem",
-                      }}
-                    >
-                      {msg.role === "user" && msg.images && msg.images.length > 0 && (
-                        <div className="flex gap-1.5 flex-wrap mb-2">
-                          {msg.images.map((img: string, index: number) => (
-                            <img
-                              key={index}
-                              src={img}
-                              alt={`Image ${index + 1}`}
-                              style={{
-                                width: 80,
-                                height: 80,
-                                objectFit: "cover",
-                                borderRadius: 8,
-                                border: "1px solid rgba(255,255,255,0.1)",
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <p
-                        className="text-sm leading-relaxed whitespace-pre-wrap"
-                        style={{
-                          color: msg.role === "user" ? "#ebebeb" : "rgba(255,255,255,0.8)",
-                          fontFamily: "var(--font-sans)",
-                          fontSize: "13px",
-                        }}
-                      >
-                        {msg.content}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                {renderedMessages}
 
                 {isStreaming && (
                   <div className="flex items-start">
@@ -727,10 +829,7 @@ export default function WorkoutChatOverlay({
                         window.clearTimeout(focusScrollTimeoutRef.current);
                       }
                       focusScrollTimeoutRef.current = window.setTimeout(() => {
-                        messagesEndRef.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "end",
-                        });
+                        scrollToBottom("smooth");
                         focusScrollTimeoutRef.current = null;
                       }, 140);
                     }}
@@ -786,3 +885,8 @@ export default function WorkoutChatOverlay({
     </Portal>
   );
 }
+
+const WorkoutChatOverlay = memo(WorkoutChatOverlayImpl);
+WorkoutChatOverlay.displayName = "WorkoutChatOverlay";
+
+export default WorkoutChatOverlay;

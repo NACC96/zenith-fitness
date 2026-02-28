@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -19,7 +19,10 @@ import ChatToggleButton from "@/components/ChatToggleButton";
 import Portal from "@/components/Portal";
 
 export default function DashboardPage() {
+  const STREAM_UI_FLUSH_MS = 50;
   const router = useRouter();
+  const streamFlushTimeoutRef = useRef<number | null>(null);
+  const streamPendingContentRef = useRef("");
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -39,15 +42,17 @@ export default function DashboardPage() {
   const deleteWorkoutSession = useMutation(api.workoutSessions.remove);
 
   // Chat sessions
-  const sessions = useQuery(api.chatSessions.list) ?? [];
+  const sessionsRaw = useQuery(api.chatSessions.list);
+  const sessions = useMemo(() => sessionsRaw ?? [], [sessionsRaw]);
   const createSession = useMutation(api.chatSessions.create);
   const deleteSession = useMutation(api.chatSessions.remove);
 
   // Chat: Convex queries and mutations
-  const chatMessages = useQuery(
+  const chatMessagesRaw = useQuery(
     api.chatMessages.list,
     activeSessionId ? { sessionId: activeSessionId } : "skip"
-  ) ?? [];
+  );
+  const chatMessages = useMemo(() => chatMessagesRaw ?? [], [chatMessagesRaw]);
   const sendMessage = useMutation(api.chatMessages.send);
   const clearChat = useMutation(api.chatMessages.clear);
   const savedModel = useQuery(api.settings.get, { key: "selectedModel" });
@@ -75,7 +80,36 @@ export default function DashboardPage() {
     }
   }, [savedModel, modelInitialized]);
 
-  const handleSendMessage = async (content: string, images?: string[]) => {
+  const flushStreamingContent = useCallback((content: string, immediate = false) => {
+    const flush = () => {
+      streamFlushTimeoutRef.current = null;
+      setStreamingContent(streamPendingContentRef.current);
+    };
+
+    streamPendingContentRef.current = content;
+    if (immediate) {
+      if (streamFlushTimeoutRef.current !== null) {
+        window.clearTimeout(streamFlushTimeoutRef.current);
+        streamFlushTimeoutRef.current = null;
+      }
+      flush();
+      return;
+    }
+
+    if (streamFlushTimeoutRef.current !== null) return;
+    streamFlushTimeoutRef.current = window.setTimeout(flush, STREAM_UI_FLUSH_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (streamFlushTimeoutRef.current !== null) {
+        window.clearTimeout(streamFlushTimeoutRef.current);
+        streamFlushTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleSendMessage = useCallback(async (content: string, images?: string[]) => {
     if (!activeSessionId || isStreaming) return;
 
     // 1. Save user message to DB via mutation
@@ -137,7 +171,7 @@ export default function DashboardPage() {
 
             if (parsed.token) {
               accumulated += parsed.token;
-              setStreamingContent(accumulated);
+              flushStreamingContent(accumulated);
             } else if (parsed.done) {
               break;
             } else if (parsed.error) {
@@ -150,30 +184,43 @@ export default function DashboardPage() {
           }
         }
       }
+      flushStreamingContent(accumulated, true);
     } catch (error) {
       console.error("Streaming failed:", error);
     } finally {
+      if (streamFlushTimeoutRef.current !== null) {
+        window.clearTimeout(streamFlushTimeoutRef.current);
+        streamFlushTimeoutRef.current = null;
+      }
+      streamPendingContentRef.current = "";
       setIsStreaming(false);
       setStreamingContent("");
     }
-  };
+  }, [
+    activeSessionId,
+    chatMessages,
+    flushStreamingContent,
+    isStreaming,
+    selectedModel,
+    sendMessage,
+  ]);
 
-  const handleModelChange = (model: string) => {
+  const handleModelChange = useCallback((model: string) => {
     setSelectedModel(model);
     saveModel({ key: "selectedModel", value: model });
-  };
+  }, [saveModel]);
 
-  const handleClearChat = async () => {
+  const handleClearChat = useCallback(async () => {
     if (!activeSessionId) return;
     await clearChat({ sessionId: activeSessionId });
-  };
+  }, [activeSessionId, clearChat]);
 
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     const id = await createSession();
     setActiveSessionId(id);
-  };
+  }, [createSession]);
 
-  const handleDeleteSession = async (sessionId: Id<"chatSessions">) => {
+  const handleDeleteSession = useCallback(async (sessionId: Id<"chatSessions">) => {
     await deleteSession({ sessionId });
     if (activeSessionId === sessionId) {
       const remaining = sessions.filter((s) => s._id !== sessionId);
@@ -184,7 +231,7 @@ export default function DashboardPage() {
         setActiveSessionId(id);
       }
     }
-  };
+  }, [activeSessionId, createSession, deleteSession, sessions]);
 
   const handleDeleteWorkout = async (sessionId: string) => {
     try {
@@ -200,6 +247,22 @@ export default function DashboardPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const toggleChat = useCallback(() => {
+    setIsChatOpen((open) => !open);
+  }, []);
+
+  const closeChat = useCallback(() => {
+    setIsChatOpen(false);
+  }, []);
+
+  const selectChatSession = useCallback((id: string) => {
+    setActiveSessionId(id as Id<"chatSessions">);
+  }, []);
+
+  const deleteChatSession = useCallback((id: string) => {
+    void handleDeleteSession(id as Id<"chatSessions">);
+  }, [handleDeleteSession]);
 
   if (rawWorkouts === undefined || workoutTypes === undefined) {
     return (
@@ -318,11 +381,11 @@ export default function DashboardPage() {
       <Portal>
         <ChatToggleButton
           isOpen={isChatOpen}
-          onClick={() => setIsChatOpen((o) => !o)}
+          onClick={toggleChat}
         />
         <ChatDrawer
           isOpen={isChatOpen}
-          onClose={() => setIsChatOpen(false)}
+          onClose={closeChat}
           messages={chatMessages}
           onSendMessage={handleSendMessage}
           isLoading={isChatLoading}
@@ -331,9 +394,9 @@ export default function DashboardPage() {
           onClearChat={handleClearChat}
           sessions={sessions}
           activeSessionId={activeSessionId}
-          onSelectSession={(id: string) => setActiveSessionId(id as Id<"chatSessions">)}
+          onSelectSession={selectChatSession}
           onNewChat={handleNewChat}
-          onDeleteSession={(id: string) => handleDeleteSession(id as Id<"chatSessions">)}
+          onDeleteSession={deleteChatSession}
           streamingContent={streamingContent}
           isStreaming={isStreaming}
         />

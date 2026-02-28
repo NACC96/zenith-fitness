@@ -39,6 +39,8 @@ type ExerciseDoc = {
   sets: TimedSet[];
 };
 
+const STREAM_UI_FLUSH_MS = 50;
+
 function getLastRestDurationMs(exercises: ExerciseDoc[]): number | null {
   let latestRestStartedAt = -1;
   let latestRestDuration: number | null = null;
@@ -69,6 +71,8 @@ function mapFeedExercises(exercises: ExerciseDoc[]): FeedExercise[] {
 export default function WorkoutPage() {
   const router = useRouter();
   const isSendingRef = useRef(false);
+  const streamFlushTimeoutRef = useRef<number | null>(null);
+  const streamPendingContentRef = useRef("");
   const [activeChatSessionId, setActiveChatSessionId] = useState<Id<"chatSessions"> | null>(null);
   const [creatingChatSession, setCreatingChatSession] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -164,7 +168,39 @@ export default function WorkoutPage() {
       });
   }, [activeSession?._id, activeChatSessionId, creatingChatSession, createChatSession]);
 
-  const handleSend = async (content: string, images?: string[]) => {
+  const flushStreamingContent = useCallback((content: string, immediate = false) => {
+    const flush = () => {
+      streamFlushTimeoutRef.current = null;
+      setStreamingContent(streamPendingContentRef.current);
+      if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+        performance.mark("workout-chat-stream-commit");
+      }
+    };
+
+    streamPendingContentRef.current = content;
+    if (immediate) {
+      if (streamFlushTimeoutRef.current !== null) {
+        window.clearTimeout(streamFlushTimeoutRef.current);
+        streamFlushTimeoutRef.current = null;
+      }
+      flush();
+      return;
+    }
+
+    if (streamFlushTimeoutRef.current !== null) return;
+    streamFlushTimeoutRef.current = window.setTimeout(flush, STREAM_UI_FLUSH_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (streamFlushTimeoutRef.current !== null) {
+        window.clearTimeout(streamFlushTimeoutRef.current);
+        streamFlushTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleSend = useCallback(async (content: string, images?: string[]) => {
     const trimmed = content.trim();
     if (
       (!trimmed && (!images || images.length === 0)) ||
@@ -176,6 +212,9 @@ export default function WorkoutPage() {
     }
     const imagesToSend = images && images.length > 0 ? images : undefined;
     isSendingRef.current = true;
+    if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+      performance.mark("workout-chat-stream-start");
+    }
     setIsStreaming(true);
     setStreamingContent("");
 
@@ -243,7 +282,7 @@ export default function WorkoutPage() {
 
             if (parsed.token) {
               accumulated += parsed.token;
-              setStreamingContent(accumulated);
+              flushStreamingContent(accumulated);
               continue;
             }
             if (parsed.done || parsed.error) {
@@ -259,14 +298,32 @@ export default function WorkoutPage() {
       if (shouldStop) {
         await reader.cancel().catch(() => {});
       }
+
+      flushStreamingContent(accumulated, true);
     } catch (error) {
       console.error("Workout chat streaming failed:", error);
     } finally {
+      if (streamFlushTimeoutRef.current !== null) {
+        window.clearTimeout(streamFlushTimeoutRef.current);
+        streamFlushTimeoutRef.current = null;
+      }
+      streamPendingContentRef.current = "";
       isSendingRef.current = false;
       setIsStreaming(false);
       setStreamingContent("");
+      if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+        performance.mark("workout-chat-stream-end");
+      }
     }
-  };
+  }, [
+    activeChatSessionId,
+    activeSession?._id,
+    chatMessages,
+    flushStreamingContent,
+    isStreaming,
+    selectedModel,
+    sendChatMessage,
+  ]);
 
   const hasFirstSetTiming =
     liveTiming?.firstSetStartedAt !== null &&
@@ -380,7 +437,15 @@ export default function WorkoutPage() {
   }, []);
 
   const closeChat = useCallback(() => {
+    if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+      performance.mark("workout-chat-close-click");
+    }
     setIsChatOpen(false);
+  }, []);
+
+  const openHistory = useCallback(() => {
+    setIsChatOpen(false);
+    setIsHistoryOpen(true);
   }, []);
 
   return (
@@ -498,10 +563,7 @@ export default function WorkoutPage() {
           exerciseCount={feedExercises.length}
           totalSetCount={totalSetCount}
           totalVolume={totalVolume}
-          onOpenHistory={() => {
-            setIsChatOpen(false);
-            setIsHistoryOpen(true);
-          }}
+          onOpenHistory={openHistory}
         />
       </div>
 
