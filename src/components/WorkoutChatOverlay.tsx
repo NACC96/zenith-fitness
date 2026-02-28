@@ -408,9 +408,8 @@ export default function WorkoutChatOverlay({
               aria-modal="true"
               aria-label="Workout chat"
               tabIndex={-1}
-              className="mx-auto max-w-[860px] rounded-2xl border flex flex-col overflow-hidden"
+              className="mx-auto max-w-[860px] max-h-[50dvh] md:max-h-[min(76vh,640px)] rounded-2xl border flex flex-col overflow-hidden"
               style={{
-                maxHeight: "min(76vh, 640px)",
                 background: "rgba(10,10,10,0.96)",
                 borderColor: "rgba(255,255,255,0.1)",
                 backdropFilter: "blur(22px)",
