@@ -68,14 +68,6 @@ export default function WorkoutChatOverlay({
   }, [isOpen, messages, isStreaming, streamingContent]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const id = window.setTimeout(() => {
-      textareaRef.current?.focus();
-    }, 40);
-    return () => window.clearTimeout(id);
-  }, [isOpen]);
-
-  useEffect(() => {
     const syncKeyboardInset = () => {
       const viewport = window.visualViewport;
       const viewportHeight = viewport?.height ?? window.innerHeight;
@@ -105,8 +97,7 @@ export default function WorkoutChatOverlay({
     if (!dialog) return;
 
     const rafId = window.requestAnimationFrame(() => {
-      const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      (firstFocusable ?? dialog).focus();
+      dialog.focus();
     });
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -443,13 +434,12 @@ export default function WorkoutChatOverlay({
                     value={selectedModel}
                     onChange={(e) => onModelChange(e.target.value)}
                     aria-label="Select AI model"
-                    className="rounded-lg px-2 py-1 outline-none cursor-pointer"
+                    className="rounded-lg px-2 py-1 outline-none cursor-pointer text-base sm:text-xs"
                     style={{
                       background: "rgba(255,255,255,0.04)",
                       border: "1px solid rgba(255,255,255,0.1)",
                       color: "rgba(255,255,255,0.5)",
                       fontFamily: "var(--font-mono)",
-                      fontSize: "10px",
                     }}
                   >
                     {models.map((model) => (
