@@ -12,7 +12,7 @@ import StatsRow from "@/components/StatsRow";
 import VolumeTrendChart from "@/components/VolumeTrendChart";
 import ExerciseProgression from "@/components/ExerciseProgression";
 import SessionList from "@/components/SessionList";
-import SessionDetail from "@/components/SessionDetail";
+import SessionDetailModal from "@/components/SessionDetailModal";
 import AddTypeModal from "@/components/AddTypeModal";
 import ChatDrawer from "@/components/ChatDrawer";
 import ChatToggleButton from "@/components/ChatToggleButton";
@@ -363,18 +363,13 @@ export default function DashboardPage() {
           <ExerciseProgression workouts={filteredSessions} />
         </div>
 
-        {/* Session list + detail panel */}
-        <div className="mt-6 flex flex-col gap-4 md:flex-row md:min-h-[500px]">
+        {/* Session list */}
+        <div className="mt-6">
           <SessionList
             workouts={filteredSessions}
-            selectedSession={selectedSession}
             onSelect={setSelectedSession}
             onDelete={handleDeleteWorkout}
             onAddType={() => setAddModalOpen(true)}
-          />
-          <SessionDetail
-            workout={selectedSession}
-            allWorkouts={allWorkouts}
           />
         </div>
       </main>
@@ -382,6 +377,13 @@ export default function DashboardPage() {
       <AddTypeModal
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}
+      />
+
+      <SessionDetailModal
+        isOpen={selectedSession !== null}
+        onClose={() => setSelectedSession(null)}
+        workout={selectedSession}
+        allWorkouts={allWorkouts}
       />
 
       <Portal>

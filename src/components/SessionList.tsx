@@ -7,7 +7,6 @@ import GlassCard from "@/components/GlassCard";
 
 interface SessionListProps {
   workouts: WorkoutSession[];
-  selectedSession: WorkoutSession | null;
   onSelect: (session: WorkoutSession) => void;
   onDelete?: (sessionId: string) => void;
   onAddType: () => void;
@@ -28,7 +27,6 @@ function getSessionDurationLabel(workout: WorkoutSession): string {
 
 export default memo(function SessionList({
   workouts,
-  selectedSession,
   onSelect,
   onDelete,
   onAddType,
@@ -41,7 +39,7 @@ export default memo(function SessionList({
   );
 
   return (
-    <div className="w-full shrink-0 flex flex-col gap-3 md:w-[320px] md:flex-shrink-0">
+    <div className="w-full flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between mb-1">
         <span
@@ -63,7 +61,7 @@ export default memo(function SessionList({
       </div>
 
       {/* Session cards */}
-      <div className="flex flex-col gap-2 max-h-[60vh] md:max-h-none overflow-y-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {sorted.length === 0 && (
           <div className="text-sm text-white/30 text-center py-8">
             No sessions logged yet
@@ -71,7 +69,6 @@ export default memo(function SessionList({
         )}
 
         {sorted.map((workout, index) => {
-          const isSelected = selectedSession?.id === workout.id;
           const volume = calcWorkoutVolume(workout);
           const exerciseCount = workout.exercises.length;
           const setCount = workout.exercises.reduce(
@@ -95,12 +92,6 @@ export default memo(function SessionList({
               style={{
                 animation: `slideInLeft 0.4s ease both`,
                 animationDelay: `${index * 0.06}s`,
-                ...(isSelected
-                  ? {
-                      background: "rgba(255,45,45,0.06)",
-                      border: "1px solid rgba(255,45,45,0.35)",
-                    }
-                  : {}),
               }}
             >
               {/* Top row: date + type badge + delete */}
@@ -109,7 +100,7 @@ export default memo(function SessionList({
                   className="text-sm font-semibold"
                   style={{
                     fontFamily: "var(--font-sans)",
-                    color: isSelected ? "#ff2d2d" : "rgba(255,255,255,0.9)",
+                    color: "rgba(255,255,255,0.9)",
                   }}
                 >
                   {new Date(workout.date + "T00:00:00").toLocaleDateString(
@@ -206,9 +197,7 @@ export default memo(function SessionList({
                     className="rounded-sm flex-1"
                     style={{
                       height: `${Math.max((vol / maxExVolume) * 100, 8)}%`,
-                      background: isSelected
-                        ? `rgba(255,45,45,${0.2 + (vol / maxExVolume) * 0.4})`
-                        : `rgba(255,255,255,${0.06 + (vol / maxExVolume) * 0.12})`,
+                      background: `rgba(255,255,255,${0.06 + (vol / maxExVolume) * 0.12})`,
                       transition: "all 0.3s ease",
                     }}
                   />
