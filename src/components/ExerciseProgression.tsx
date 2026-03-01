@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import type { WorkoutSession } from "@/lib/types";
 import { getMaxWeight, formatNum } from "@/lib/utils";
 import GlassCard from "./GlassCard";
@@ -16,51 +17,46 @@ interface ProgressionEntry {
   pct: number;
 }
 
-export default function ExerciseProgression({
+export default memo(function ExerciseProgression({
   workouts,
 }: ExerciseProgressionProps) {
-  const sorted = [...workouts].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  );
+  const { top, maxAbsChange } = useMemo(() => {
+    const sorted = [...workouts].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
 
-  // Build progression data for each unique exercise
-  const exerciseMap = new Map<string, { first: number; last: number; count: number }>();
+    const exerciseMap = new Map<string, { first: number; last: number; count: number }>();
 
-  for (const w of sorted) {
-    for (const ex of w.exercises) {
-      const maxW = getMaxWeight(ex.sets);
-      const existing = exerciseMap.get(ex.name);
-      if (!existing) {
-        exerciseMap.set(ex.name, { first: maxW, last: maxW, count: 1 });
-      } else {
-        existing.last = maxW;
-        existing.count++;
+    for (const w of sorted) {
+      for (const ex of w.exercises) {
+        const maxW = getMaxWeight(ex.sets);
+        const existing = exerciseMap.get(ex.name);
+        if (!existing) {
+          exerciseMap.set(ex.name, { first: maxW, last: maxW, count: 1 });
+        } else {
+          existing.last = maxW;
+          existing.count++;
+        }
       }
     }
-  }
 
-  // Filter to exercises with 2+ data points, compute progression
-  const progressions: ProgressionEntry[] = [];
-  for (const [name, data] of exerciseMap) {
-    if (data.count < 2) continue;
-    const change = data.last - data.first;
-    const pct = data.first > 0 ? (change / data.first) * 100 : 0;
-    progressions.push({
-      name,
-      firstMax: data.first,
-      lastMax: data.last,
-      change,
-      pct,
-    });
-  }
+    const progressions: ProgressionEntry[] = [];
+    for (const [name, data] of exerciseMap) {
+      if (data.count < 2) continue;
+      const change = data.last - data.first;
+      const pct = data.first > 0 ? (change / data.first) * 100 : 0;
+      progressions.push({ name, firstMax: data.first, lastMax: data.last, change, pct });
+    }
 
-  // Sort by absolute change descending, take top 5
-  const top = progressions
-    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
-    .slice(0, 5);
+    const topEntries = progressions
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+      .slice(0, 5);
 
-  // For progress bar width: scale relative to max change
-  const maxAbsChange = top.length > 0 ? Math.max(...top.map((p) => Math.abs(p.change))) : 1;
+    return {
+      top: topEntries,
+      maxAbsChange: topEntries.length > 0 ? Math.max(...topEntries.map((p) => Math.abs(p.change))) : 1,
+    };
+  }, [workouts]);
 
   return (
     <GlassCard className="flex-1 p-4 md:p-6">
@@ -162,4 +158,4 @@ export default function ExerciseProgression({
       )}
     </GlassCard>
   );
-}
+});

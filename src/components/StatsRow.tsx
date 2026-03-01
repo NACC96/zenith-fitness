@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import type { WorkoutSession } from "@/lib/types";
 import { calcWorkoutVolume, getMaxWeight, formatNum } from "@/lib/utils";
 import StatCard from "./StatCard";
@@ -9,35 +10,41 @@ interface StatsRowProps {
   activeFilter: string;
 }
 
-export default function StatsRow({ workouts, activeFilter }: StatsRowProps) {
-  const filtered =
-    activeFilter === "All"
-      ? workouts
-      : workouts.filter((w) => w.type === activeFilter);
+export default memo(function StatsRow({ workouts, activeFilter }: StatsRowProps) {
+  const filtered = useMemo(
+    () =>
+      activeFilter === "All"
+        ? workouts
+        : workouts.filter((w) => w.type === activeFilter),
+    [workouts, activeFilter],
+  );
 
-  const totalVolume = filtered.reduce((sum, w) => sum + calcWorkoutVolume(w), 0);
-  const sessionCount = filtered.length;
-  const totalSets = filtered.reduce(
-    (sum, w) => sum + w.exercises.reduce((s, ex) => s + ex.sets.length, 0),
-    0,
-  );
-  const totalReps = filtered.reduce(
-    (sum, w) =>
-      sum +
-      w.exercises.reduce(
-        (s, ex) => s + ex.sets.reduce((r, set) => r + set.reps, 0),
-        0,
-      ),
-    0,
-  );
-  const heaviestLift = filtered.reduce(
-    (max, w) =>
-      Math.max(
-        max,
-        ...w.exercises.map((ex) => getMaxWeight(ex.sets)),
-      ),
-    0,
-  );
+  const { totalVolume, sessionCount, totalSets, totalReps, heaviestLift } = useMemo(() => {
+    let volume = 0;
+    let sets = 0;
+    let reps = 0;
+    let heaviest = 0;
+
+    for (const w of filtered) {
+      volume += calcWorkoutVolume(w);
+      for (const ex of w.exercises) {
+        sets += ex.sets.length;
+        for (const set of ex.sets) {
+          reps += set.reps;
+        }
+        const maxW = getMaxWeight(ex.sets);
+        if (maxW > heaviest) heaviest = maxW;
+      }
+    }
+
+    return {
+      totalVolume: volume,
+      sessionCount: filtered.length,
+      totalSets: sets,
+      totalReps: reps,
+      heaviestLift: heaviest,
+    };
+  }, [filtered]);
 
   const sessionLabel = sessionCount === 1 ? "session" : "sessions";
 
@@ -75,4 +82,4 @@ export default function StatsRow({ workouts, activeFilter }: StatsRowProps) {
       </div>
     </div>
   );
-}
+});

@@ -57,6 +57,41 @@ function resolveSetTimingBounds(exercises: ExerciseWithTimedSets[]) {
   return { earliestStartedAt, latestEndedAt };
 }
 
+// Hydrate a list of sessions with exercises and computed timing
+async function hydrateSessions(
+  ctx: any,
+  sessions: any[]
+) {
+  return Promise.all(
+    sessions.map(async (session: any) => {
+      const exercises = await ctx.db
+        .query("exercises")
+        .withIndex("by_session", (q: any) => q.eq("sessionId", session._id))
+        .collect();
+      const { earliestStartedAt, latestEndedAt } = resolveSetTimingBounds(exercises);
+      const firstSetStartedAt = session.firstSetStartedAt ?? earliestStartedAt;
+      const lastSetEndedAt = session.lastSetEndedAt ?? latestEndedAt;
+      const duration =
+        session.duration ??
+        (firstSetStartedAt === undefined || lastSetEndedAt === undefined
+          ? undefined
+          : formatDurationMinutes(Math.max(0, lastSetEndedAt - firstSetStartedAt)));
+
+      return {
+        ...session,
+        id: session._id,
+        firstSetStartedAt,
+        lastSetEndedAt,
+        duration,
+        exercises: exercises.map((ex: any) => ({
+          name: ex.name,
+          sets: ex.sets,
+        })),
+      };
+    })
+  );
+}
+
 // Get all sessions with their exercises, sorted by date desc
 export const listAll = query({
   args: {},
@@ -65,37 +100,20 @@ export const listAll = query({
       .query("workoutSessions")
       .order("desc")
       .collect();
+    return hydrateSessions(ctx, sessions);
+  },
+});
 
-    const result = await Promise.all(
-      sessions.map(async (session) => {
-        const exercises = await ctx.db
-          .query("exercises")
-          .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-          .collect();
-        const { earliestStartedAt, latestEndedAt } = resolveSetTimingBounds(exercises);
-        const firstSetStartedAt = session.firstSetStartedAt ?? earliestStartedAt;
-        const lastSetEndedAt = session.lastSetEndedAt ?? latestEndedAt;
-        const duration =
-          session.duration ??
-          (firstSetStartedAt === undefined || lastSetEndedAt === undefined
-            ? undefined
-            : formatDurationMinutes(Math.max(0, lastSetEndedAt - firstSetStartedAt)));
-
-        return {
-          ...session,
-          id: session._id,
-          firstSetStartedAt,
-          lastSetEndedAt,
-          duration,
-          exercises: exercises.map((ex) => ({
-            name: ex.name,
-            sets: ex.sets,
-          })),
-        };
-      })
-    );
-
-    return result;
+// Get recent sessions with pagination support (default 50)
+export const listRecent = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const take = args.limit ?? 50;
+    const sessions = await ctx.db
+      .query("workoutSessions")
+      .order("desc")
+      .take(take);
+    return hydrateSessions(ctx, sessions);
   },
 });
 

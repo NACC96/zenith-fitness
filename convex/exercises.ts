@@ -38,16 +38,21 @@ function normalizeSetsWithTiming(sets: TimedSet[], inferredAt: number): TimedSet
   }));
 }
 
-async function findExerciseByName(
+// Collect all exercises for a session in a single query (reusable across helpers)
+async function collectSessionExercises(
   ctx: any,
-  sessionId: Id<"workoutSessions">,
-  exerciseName: string
+  sessionId: Id<"workoutSessions">
 ) {
-  const exercises = await ctx.db
+  return ctx.db
     .query("exercises")
     .withIndex("by_session", (q: any) => q.eq("sessionId", sessionId))
     .collect();
+}
 
+function findExerciseByNameInList(
+  exercises: any[],
+  exerciseName: string
+) {
   return (
     exercises.find((exercise: any) =>
       exercise.name.toLowerCase() === exerciseName.toLowerCase()
@@ -55,16 +60,11 @@ async function findExerciseByName(
   );
 }
 
-async function closeOpenRest(
+async function closeOpenRestFromList(
   ctx: any,
-  sessionId: Id<"workoutSessions">,
+  exercises: any[],
   restEndedAt: number
 ) {
-  const exercises = await ctx.db
-    .query("exercises")
-    .withIndex("by_session", (q: any) => q.eq("sessionId", sessionId))
-    .collect();
-
   let latestCandidateExercise: any | null = null;
   let latestCandidateSetIndex = -1;
   let latestCandidateRestStartedAt = -1;
@@ -96,9 +96,11 @@ async function appendSetsToExercise(
   ctx: any,
   sessionId: Id<"workoutSessions">,
   exerciseName: string,
-  sets: TimedSet[]
+  sets: TimedSet[],
+  preloadedExercises?: any[]
 ) {
-  const existing = await findExerciseByName(ctx, sessionId, exerciseName);
+  const exercises = preloadedExercises ?? await collectSessionExercises(ctx, sessionId);
+  const existing = findExerciseByNameInList(exercises, exerciseName);
 
   if (!existing) {
     return await ctx.db.insert("exercises", {
@@ -146,15 +148,19 @@ export const add = mutation({
       ...normalizedSets.map((set) => set.endedAt ?? inferredAt)
     );
 
+    // Single DB query for all exercises in this session
+    const exercises = await collectSessionExercises(ctx, args.sessionId);
+
     if (session.activeRestStartedAt !== undefined) {
-      await closeOpenRest(ctx, args.sessionId, earliestStartedAt);
+      await closeOpenRestFromList(ctx, exercises, earliestStartedAt);
     }
 
     const exerciseId = await appendSetsToExercise(
       ctx,
       args.sessionId,
       args.name,
-      normalizedSets
+      normalizedSets,
+      exercises
     );
 
     await ctx.db.patch(args.sessionId, {
@@ -186,7 +192,8 @@ export const startSet = mutation({
     const now = Date.now();
 
     if (session.activeRestStartedAt !== undefined) {
-      await closeOpenRest(ctx, args.sessionId, now);
+      const exercises = await collectSessionExercises(ctx, args.sessionId);
+      await closeOpenRestFromList(ctx, exercises, now);
     }
 
     await ctx.db.patch(args.sessionId, {
@@ -225,8 +232,11 @@ export const completeSet = mutation({
 
     const startedAt = session.activeSet?.startedAt ?? now;
 
+    // Single DB query for all exercises in this session
+    const exercises = await collectSessionExercises(ctx, args.sessionId);
+
     if (session.activeRestStartedAt !== undefined) {
-      await closeOpenRest(ctx, args.sessionId, startedAt);
+      await closeOpenRestFromList(ctx, exercises, startedAt);
     }
 
     const completedSet: TimedSet = {
@@ -237,7 +247,7 @@ export const completeSet = mutation({
       restStartedAt: now,
     };
 
-    await appendSetsToExercise(ctx, args.sessionId, exerciseName, [completedSet]);
+    await appendSetsToExercise(ctx, args.sessionId, exerciseName, [completedSet], exercises);
 
     await ctx.db.patch(args.sessionId, {
       firstSetStartedAt:
