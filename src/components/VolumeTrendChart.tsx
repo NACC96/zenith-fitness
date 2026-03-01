@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import type { WorkoutSession } from "@/lib/types";
 import { calcWorkoutVolume } from "@/lib/utils";
 import GlassCard from "./GlassCard";
@@ -10,7 +10,7 @@ interface VolumeTrendChartProps {
   workouts: WorkoutSession[];
 }
 
-export default function VolumeTrendChart({ workouts }: VolumeTrendChartProps) {
+export default memo(function VolumeTrendChart({ workouts }: VolumeTrendChartProps) {
   const [mounted, setMounted] = useState(false);
   const [Recharts, setRecharts] = useState<typeof import("recharts") | null>(
     null,
@@ -21,17 +21,15 @@ export default function VolumeTrendChart({ workouts }: VolumeTrendChartProps) {
     import("recharts").then(setRecharts);
   }, []);
 
-  const sorted = [...workouts].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  );
-
-  const data = sorted.map((w) => {
-    const d = new Date(w.date);
-    return {
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+  const data = useMemo(() => {
+    const sorted = [...workouts].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+    return sorted.map((w) => ({
+      date: new Date(w.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       volume: calcWorkoutVolume(w),
-    };
-  });
+    }));
+  }, [workouts]);
 
   return (
     <GlassCard className="flex-2 p-4 md:p-6">
@@ -104,4 +102,4 @@ export default function VolumeTrendChart({ workouts }: VolumeTrendChartProps) {
       )}
     </GlassCard>
   );
-}
+});

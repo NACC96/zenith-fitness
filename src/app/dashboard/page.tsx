@@ -36,7 +36,7 @@ export default function DashboardPage() {
 
   const rawWorkouts = useQuery(api.workoutSessions.listAll);
   const workoutTypes = useQuery(api.workoutTypes.list);
-  const allWorkouts = (rawWorkouts ?? []) as WorkoutSession[];
+  const allWorkouts = useMemo(() => (rawWorkouts ?? []) as WorkoutSession[], [rawWorkouts]);
 
   // Workout session deletion
   const deleteWorkoutSession = useMutation(api.workoutSessions.remove);
@@ -70,7 +70,18 @@ export default function DashboardPage() {
     }
   }, [sessions, activeSessionId, createSession]);
 
-  const filterOptions = ["All", ...(workoutTypes?.map((t) => t.name) ?? [])];
+  const filterOptions = useMemo(
+    () => ["All", ...(workoutTypes?.map((t) => t.name) ?? [])],
+    [workoutTypes],
+  );
+
+  const filteredSessions = useMemo(
+    () =>
+      activeFilter === "All"
+        ? allWorkouts
+        : allWorkouts.filter((w) => w.type === activeFilter),
+    [allWorkouts, activeFilter],
+  );
 
   // Sync saved model preference from Convex
   useEffect(() => {
@@ -289,11 +300,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const filteredSessions =
-    activeFilter === "All"
-      ? allWorkouts
-      : allWorkouts.filter((w) => w.type === activeFilter);
 
   return (
     <div

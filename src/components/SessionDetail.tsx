@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { WorkoutSession } from "@/lib/types";
 import {
@@ -22,7 +22,7 @@ interface SessionDetailProps {
   allWorkouts: WorkoutSession[];
 }
 
-export default function SessionDetail({
+export default memo(function SessionDetail({
   workout,
   allWorkouts,
 }: SessionDetailProps) {
@@ -38,23 +38,36 @@ export default function SessionDetail({
         new Date(w.date) < new Date(workout.date)
     );
 
-    for (const ex of workout.exercises) {
-      const currentMax = getMaxWeight(ex.sets);
-      let prevMax = 0;
-      for (const session of previousSessions) {
-        const matchingEx = session.exercises.find((e) => e.name === ex.name);
-        if (matchingEx) {
-          prevMax = Math.max(prevMax, getMaxWeight(matchingEx.sets));
-        }
+    // Build a map of exercise name -> max weight across all previous sessions
+    const prevMaxByExercise = new Map<string, number>();
+    for (const session of previousSessions) {
+      for (const ex of session.exercises) {
+        const maxW = getMaxWeight(ex.sets);
+        const prev = prevMaxByExercise.get(ex.name) ?? 0;
+        if (maxW > prev) prevMaxByExercise.set(ex.name, maxW);
       }
-      // PR if there are previous sessions with this exercise and current exceeds them
-      if (previousSessions.some((s) => s.exercises.some((e) => e.name === ex.name)) && currentMax > prevMax) {
+    }
+
+    for (const ex of workout.exercises) {
+      const prevMax = prevMaxByExercise.get(ex.name);
+      if (prevMax !== undefined && getMaxWeight(ex.sets) > prevMax) {
         prs.add(ex.name);
       }
     }
 
     return prs;
   }, [workout, allWorkouts]);
+
+  const { totalVolume, chartData } = useMemo(() => {
+    if (!workout) return { totalVolume: 0, chartData: [] };
+    return {
+      totalVolume: calcWorkoutVolume(workout),
+      chartData: workout.exercises.map((ex) => ({
+        name: ex.name,
+        volume: calcVolume(ex.sets),
+      })),
+    };
+  }, [workout]);
 
   if (!workout) {
     return (
@@ -67,12 +80,6 @@ export default function SessionDetail({
       </div>
     );
   }
-
-  const totalVolume = calcWorkoutVolume(workout);
-  const chartData = workout.exercises.map((ex) => ({
-    name: ex.name,
-    volume: calcVolume(ex.sets),
-  }));
 
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-4">
@@ -211,4 +218,4 @@ export default function SessionDetail({
       </GlassCard>
     </div>
   );
-}
+});

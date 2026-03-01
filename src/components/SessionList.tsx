@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import type { WorkoutSession } from "@/lib/types";
 import { calcVolume, calcWorkoutVolume, formatNum } from "@/lib/utils";
 import GlassCard from "@/components/GlassCard";
@@ -25,15 +26,18 @@ function getSessionDurationLabel(workout: WorkoutSession): string {
   return "--";
 }
 
-export default function SessionList({
+export default memo(function SessionList({
   workouts,
   selectedSession,
   onSelect,
   onDelete,
   onAddType,
 }: SessionListProps) {
-  const sorted = [...workouts].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  const sorted = useMemo(
+    () => [...workouts].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    ),
+    [workouts],
   );
 
   return (
@@ -216,4 +220,4 @@ export default function SessionList({
       </div>
     </div>
   );
-}
+});
