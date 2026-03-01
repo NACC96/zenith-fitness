@@ -145,7 +145,7 @@ export default function ChatDrawer({
     previousMessageCountRef.current = messages.length;
     previousStreamingLengthRef.current = streamingContent.length;
     scrollToBottom("auto");
-  }, [isOpen, scrollToBottom]);
+  }, [activeSessionId, isOpen, scrollToBottom]);
 
   useEffect(() => {
     if (!isOpen) {
