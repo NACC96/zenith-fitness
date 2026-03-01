@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Portal from "@/components/Portal";
+import ChatMarkdown from "@/components/ChatMarkdown";
 
 export type WorkoutChatMessage = {
   _id: string;
@@ -89,16 +90,20 @@ const WorkoutChatMessageRow = memo(
               ))}
             </div>
           )}
-          <p
-            className="text-sm leading-relaxed whitespace-pre-wrap"
-            style={{
-              color: role === "user" ? "#ebebeb" : "rgba(255,255,255,0.8)",
-              fontFamily: "var(--font-sans)",
-              fontSize: "13px",
-            }}
-          >
-            {content}
-          </p>
+          {role === "assistant" ? (
+            <ChatMarkdown content={content} />
+          ) : (
+            <p
+              className="text-sm leading-relaxed whitespace-pre-wrap"
+              style={{
+                color: "#ebebeb",
+                fontFamily: "var(--font-sans)",
+                fontSize: "13px",
+              }}
+            >
+              {content}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -693,16 +698,7 @@ function WorkoutChatOverlayImpl({
                       }}
                     >
                       {streamingContent ? (
-                        <p
-                          className="text-sm leading-relaxed whitespace-pre-wrap"
-                          style={{
-                            color: "rgba(255,255,255,0.8)",
-                            fontFamily: "var(--font-sans)",
-                            fontSize: "13px",
-                          }}
-                        >
-                          {streamingContent}
-                        </p>
+                        <ChatMarkdown content={streamingContent} />
                       ) : (
                         <>
                           <span className="chat-dot" style={{ animationDelay: "0ms" }} />
