@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ChatMessage {
   _id: string;
@@ -121,14 +121,77 @@ export default function ChatDrawer({
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previousMessageCountRef = useRef(0);
+  const previousStreamingLengthRef = useRef(0);
+  const streamScrollRafRef = useRef<number | null>(null);
 
-  // Auto-scroll to bottom on new messages and streaming
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
+
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const distanceFromBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+    return distanceFromBottom <= 120;
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading, streamingContent]);
+    if (!isOpen) return;
+    previousMessageCountRef.current = messages.length;
+    previousStreamingLengthRef.current = streamingContent.length;
+    scrollToBottom("auto");
+  }, [activeSessionId, isOpen, scrollToBottom]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      previousMessageCountRef.current = messages.length;
+      return;
+    }
+
+    if (messages.length > previousMessageCountRef.current) {
+      scrollToBottom(previousMessageCountRef.current > 0 ? "smooth" : "auto");
+    }
+    previousMessageCountRef.current = messages.length;
+  }, [isOpen, messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    const streamingLength = streamingContent.length;
+
+    if (!isOpen || !isStreaming) {
+      previousStreamingLengthRef.current = streamingLength;
+      return;
+    }
+
+    if (streamingLength <= previousStreamingLengthRef.current) {
+      previousStreamingLengthRef.current = streamingLength;
+      return;
+    }
+
+    previousStreamingLengthRef.current = streamingLength;
+    if (!isNearBottom()) return;
+    if (streamScrollRafRef.current !== null) return;
+
+    streamScrollRafRef.current = window.requestAnimationFrame(() => {
+      streamScrollRafRef.current = null;
+      if (isNearBottom()) {
+        scrollToBottom("auto");
+      }
+    });
+  }, [isNearBottom, isOpen, isStreaming, scrollToBottom, streamingContent.length]);
+
+  useEffect(() => {
+    return () => {
+      if (streamScrollRafRef.current !== null) {
+        window.cancelAnimationFrame(streamScrollRafRef.current);
+        streamScrollRafRef.current = null;
+      }
+    };
+  }, []);
 
   // Focus input when drawer opens
   useEffect(() => {
@@ -499,7 +562,7 @@ export default function ChatDrawer({
           </div>
 
           {/* Messages area */}
-          <div className="absolute inset-0 overflow-y-auto px-4 py-4 space-y-3">
+          <div ref={messagesContainerRef} className="absolute inset-0 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 && !isLoading && (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 {/* Brain icon */}
