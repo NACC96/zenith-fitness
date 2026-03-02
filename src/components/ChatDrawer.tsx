@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import ChatMarkdown from "@/components/ChatMarkdown";
 
 interface ChatMessage {
   _id: string;
@@ -73,32 +74,6 @@ function formatRelativeDate(timestamp: number): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function renderMarkdown(text: string): string {
-  // Strip any raw HTML tags first for safety
-  let safe = text.replace(/<[^>]*>/g, "");
-  // Bold: **text**
-  safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Italic: *text* (but not inside bold)
-  safe = safe.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
-  // Inline code: `code`
-  safe = safe.replace(
-    /`([^`]+)`/g,
-    '<code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:12px">$1</code>',
-  );
-  // Process line by line for bullets and line breaks
-  const lines = safe.split("\n");
-  const out: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith("- ")) {
-      out.push(
-        `<div style="display:flex;gap:8px;padding-left:8px"><span style="color:#ff2d2d">•</span><span>${line.slice(2)}</span></div>`,
-      );
-    } else {
-      out.push(line);
-    }
-  }
-  return out.join("<br />");
-}
 
 export default function ChatDrawer({
   isOpen,
@@ -667,17 +642,7 @@ export default function ChatDrawer({
                     </div>
                   )}
                   {msg.role === "assistant" ? (
-                    <div
-                      className="text-sm leading-relaxed"
-                      style={{
-                        color: "rgba(255,255,255,0.8)",
-                        fontFamily: "var(--font-sans)",
-                        fontSize: "14px",
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: renderMarkdown(msg.content),
-                      }}
-                    />
+                    <ChatMarkdown content={msg.content} />
                   ) : msg.content ? (
                     <p
                       className="text-sm leading-relaxed whitespace-pre-wrap"
@@ -731,17 +696,7 @@ export default function ChatDrawer({
                     borderRadius: "1rem 1rem 1rem 0.375rem",
                   }}
                 >
-                  <div
-                    className="text-sm leading-relaxed"
-                    style={{
-                      color: "rgba(255,255,255,0.8)",
-                      fontFamily: "var(--font-sans)",
-                      fontSize: "14px",
-                    }}
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(streamingContent),
-                    }}
-                  />
+                  <ChatMarkdown content={streamingContent} />
                 </div>
               </div>
             )}
