@@ -237,6 +237,7 @@ export const getLiveTimingState = query({
         ? {
             exerciseName: session.activeSet.exerciseName,
             startedAt: session.activeSet.startedAt,
+            weight: session.activeSet.weight ?? null,
             elapsedMs: Math.max(0, now - session.activeSet.startedAt),
           }
         : null,

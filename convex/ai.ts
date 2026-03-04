@@ -27,7 +27,7 @@ function getWorkoutSystemPrompt(workoutSessionId: string): string {
   return `You are Zenith AI, a live workout assistant. The user is actively working out right now.
 
 WORKFLOW:
-1. When the user says they're starting an exercise (e.g., "starting bench press", "bench press 25lb plates on bar"), use startSet to begin the timer
+1. When the user says they're starting an exercise (e.g., "starting bench press", "bench press 25lb plates on bar"), use startSet to begin the timer. ALWAYS include the weight parameter if the user mentioned weight — this pre-fills the UI for quick rep entry.
 2. When the user reports finishing (e.g., "done", "got 12", "12 reps", "finished"), use completeSet to stop the timer and record the set. Rest timer starts automatically.
 3. When the user starts their next set, the rest timer ends automatically
 
@@ -259,13 +259,17 @@ const TOOLS = [
     function: {
       name: "startSet",
       description:
-        "Start the set timer for an exercise. Use this when the user says they're starting/beginning a set. The timer will run until completeSet is called.",
+        "Start the set timer for an exercise. Use this when the user says they're starting/beginning a set. The timer will run until completeSet is called. Include weight if mentioned.",
       parameters: {
         type: "object",
         properties: {
           exerciseName: {
             type: "string",
             description: "Exercise name (e.g., Bench Press, Squat)",
+          },
+          weight: {
+            type: "number",
+            description: "Weight in pounds (total bar weight). Include if the user mentioned weight.",
           },
         },
         required: ["exerciseName"],
@@ -860,12 +864,14 @@ async function handleStartSet(ctx: any, args: any, workoutSessionId?: string): P
     const result = await ctx.runMutation(api.exercises.startSet, {
       sessionId: sessionId as Id<"workoutSessions">,
       exerciseName: args.exerciseName,
+      weight: args.weight,
     });
     return JSON.stringify({
       success: true,
       exerciseName: args.exerciseName,
+      weight: args.weight ?? null,
       startedAt: result.startedAt,
-      message: `Timer started for ${args.exerciseName}`,
+      message: `Timer started for ${args.exerciseName}${args.weight ? ` at ${args.weight} lbs` : ""}`,
     });
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);

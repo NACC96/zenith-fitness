@@ -20,6 +20,7 @@ export default defineSchema({
       v.object({
         exerciseName: v.string(),
         startedAt: v.number(),
+        weight: v.optional(v.number()),
       })
     ),
     activeRestStartedAt: v.optional(v.number()),

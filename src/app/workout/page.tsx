@@ -89,6 +89,7 @@ export default function WorkoutPage() {
   const createActiveSession = useMutation(api.workoutSessions.createActive);
   const finishActiveSession = useMutation(api.workoutSessions.finishActive);
   const removeSession = useMutation(api.workoutSessions.remove);
+  const completeSetMutation = useMutation(api.exercises.completeSet);
   const createChatSession = useMutation(api.chatSessions.create);
   const sendChatMessage = useMutation(api.chatMessages.send);
   const exercisesRaw = useQuery(
@@ -448,6 +449,25 @@ export default function WorkoutPage() {
     setIsHistoryOpen(true);
   }, []);
 
+  const handleCompleteSetFromUI = useCallback(async (weight: number, reps: number) => {
+    if (!activeSession) return;
+    try {
+      await completeSetMutation({
+        sessionId: activeSession._id,
+        weight,
+        reps,
+      });
+    } catch (err) {
+      console.error("Failed to complete set:", err);
+    }
+  }, [activeSession, completeSetMutation]);
+
+  const activeSetWeight = liveTiming?.activeSet?.weight
+    ?? (activeExerciseName && activeExerciseName === latestCompletedSet?.exerciseName
+        ? latestCompletedSet?.weight
+        : null)
+    ?? null;
+
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden" style={{ background: "#0a0a0a" }}>
       <div
@@ -564,6 +584,8 @@ export default function WorkoutPage() {
           totalSetCount={totalSetCount}
           totalVolume={totalVolume}
           onOpenHistory={openHistory}
+          activeSetWeight={activeSetWeight}
+          onCompleteSet={handleCompleteSetFromUI}
         />
       </div>
 
