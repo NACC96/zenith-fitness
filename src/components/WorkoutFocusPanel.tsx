@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { LatestCompletedSet } from "@/components/workout/types";
 import { formatDuration, formatNum } from "@/lib/utils";
 
@@ -28,7 +28,7 @@ function getStateLabel(state: WorkoutFocusState): string {
   return "No Sets Yet";
 }
 
-export default function WorkoutFocusPanel({
+function WorkoutFocusPanelImpl({
   focusState,
   activeExerciseName,
   activeSetElapsedMs,
@@ -260,3 +260,7 @@ export default function WorkoutFocusPanel({
     </div>
   );
 }
+
+const WorkoutFocusPanel = memo(WorkoutFocusPanelImpl);
+WorkoutFocusPanel.displayName = "WorkoutFocusPanel";
+export default WorkoutFocusPanel;
