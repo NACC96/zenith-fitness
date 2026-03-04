@@ -184,6 +184,7 @@ export const startSet = mutation({
   args: {
     sessionId: v.id("workoutSessions"),
     exerciseName: v.string(),
+    weight: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -201,6 +202,7 @@ export const startSet = mutation({
       activeSet: {
         exerciseName: args.exerciseName,
         startedAt: now,
+        weight: args.weight,
       },
       activeRestStartedAt: undefined,
     });

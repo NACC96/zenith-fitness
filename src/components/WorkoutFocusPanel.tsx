@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { LatestCompletedSet } from "@/components/workout/types";
 import { formatDuration, formatNum } from "@/lib/utils";
 
@@ -16,6 +17,8 @@ export interface WorkoutFocusPanelProps {
   totalSetCount: number;
   totalVolume: number;
   onOpenHistory: () => void;
+  activeSetWeight: number | null;
+  onCompleteSet: (weight: number, reps: number) => void;
 }
 
 function getStateLabel(state: WorkoutFocusState): string {
@@ -36,7 +39,25 @@ export default function WorkoutFocusPanel({
   totalSetCount,
   totalVolume,
   onOpenHistory,
+  activeSetWeight,
+  onCompleteSet,
 }: WorkoutFocusPanelProps) {
+  const [weightValue, setWeightValue] = useState("");
+  const [repsValue, setRepsValue] = useState("");
+  const repsInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (activeSetWeight !== null) {
+      setWeightValue(String(activeSetWeight));
+    }
+  }, [activeSetWeight]);
+
+  useEffect(() => {
+    if (focusState === "activeSet") {
+      setRepsValue("");
+    }
+  }, [focusState]);
+
   const timerMs =
     focusState === "activeSet"
       ? activeSetElapsedMs
@@ -106,6 +127,69 @@ export default function WorkoutFocusPanel({
               >
                 Awaiting next set
               </div>
+            )}
+
+            {focusState === "activeSet" && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const w = parseFloat(weightValue);
+                  const r = parseInt(repsValue, 10);
+                  if (!isNaN(w) && w > 0 && !isNaN(r) && r > 0) {
+                    onCompleteSet(w, r);
+                    setRepsValue("");
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={weightValue}
+                    onChange={(e) => setWeightValue(e.target.value)}
+                    className="w-16 rounded-lg px-2 py-2 font-mono text-sm text-center outline-none"
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "rgba(255,255,255,0.8)",
+                    }}
+                    placeholder="lbs"
+                  />
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-white/35">lbs</span>
+                </div>
+                <span className="text-white/20 font-mono">&times;</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    ref={repsInputRef}
+                    type="number"
+                    inputMode="numeric"
+                    value={repsValue}
+                    onChange={(e) => setRepsValue(e.target.value)}
+                    className="w-16 rounded-lg px-2 py-2 font-mono text-sm text-center outline-none"
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "rgba(255,255,255,0.8)",
+                    }}
+                    placeholder="reps"
+                    autoFocus
+                  />
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-white/35">reps</span>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!weightValue || !repsValue}
+                  className="px-3 py-2 rounded-lg font-mono text-xs uppercase tracking-wider cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{
+                    background: "rgba(255,45,45,0.12)",
+                    border: "1px solid rgba(255,45,45,0.3)",
+                    color: "#ff2d2d",
+                  }}
+                >
+                  Log
+                </button>
+              </form>
             )}
 
             {activeExerciseName && (
