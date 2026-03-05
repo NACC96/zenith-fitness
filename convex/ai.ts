@@ -23,7 +23,42 @@ Key rules:
 - After deleting, confirm what was removed
 - Users can attach images to their messages. When you receive an image, analyze it and respond helpfully. For gym-related images (form check photos, equipment, nutrition labels), provide relevant fitness advice.`;
 
-function getWorkoutSystemPrompt(workoutSessionId: string): string {
+interface WorkoutState {
+  exercises: { name: string; sets: { weight: number; reps: number }[] }[];
+  activeSet: { exerciseName: string; weight: number | null; startedAt: number } | null;
+  isResting: boolean;
+}
+
+function formatWorkoutState(workoutState?: WorkoutState): string {
+  if (!workoutState) return "";
+
+  const lines: string[] = ["", "CURRENT WORKOUT STATE:"];
+
+  if (workoutState.activeSet) {
+    const elapsed = Math.round((Date.now() - workoutState.activeSet.startedAt) / 1000);
+    const weightStr = workoutState.activeSet.weight ? ` at ${workoutState.activeSet.weight} lbs` : "";
+    lines.push(`- Active set: ${workoutState.activeSet.exerciseName}${weightStr} (started ${elapsed}s ago)`);
+  } else if (workoutState.isResting) {
+    lines.push("- Status: Resting between sets");
+  } else {
+    lines.push("- Status: No active set");
+  }
+
+  if (workoutState.exercises.length > 0) {
+    lines.push("- Completed exercises:");
+    for (const ex of workoutState.exercises) {
+      if (ex.sets.length === 0) continue;
+      const setDescs = ex.sets.map((s, i) => `Set ${i + 1}: ${s.weight} lbs × ${s.reps} reps`);
+      lines.push(`  - ${ex.name}: ${setDescs.join(", ")}`);
+    }
+  } else {
+    lines.push("- No exercises logged yet");
+  }
+
+  return lines.join("\n");
+}
+
+function getWorkoutSystemPrompt(workoutSessionId: string, workoutState?: WorkoutState): string {
   return `You are Zenith AI, a live workout assistant. The user is actively working out right now.
 
 WORKFLOW:
@@ -45,6 +80,9 @@ BEHAVIOR:
 - If the user says just a number like "12" after starting a set, that means 12 reps at the same weight context
 - Track the current weight context — if user said "25lb plates" for set 1, assume same weight for subsequent sets unless told otherwise
 - You can also answer questions, suggest exercises, give form tips between sets
+- IMPORTANT: Check the CURRENT WORKOUT STATE below before asking about reps/weight. If a set was already completed (appears in the exercise list), acknowledge it instead of asking again.
+- The user can log sets manually via the UI without telling you. If the workout state shows a set you didn't log, that's normal — acknowledge it and move on.
+- If the user says "I already entered it", "I logged it", or similar, check the workout state to confirm and continue.
 
 WORKOUT TYPE:
 - After the user's FIRST exercise, automatically call setWorkoutType to categorize the workout
@@ -68,7 +106,7 @@ Key rules:
 - Weight is always in pounds (lb)
 - Today's date is ${new Date().toISOString().split("T")[0]}
 - When asked to delete, confirm before doing it
-- Users can attach images. Analyze them in workout context.`;
+- Users can attach images. Analyze them in workout context.${formatWorkoutState(workoutState)}`;
 }
 
 const TOOLS = [
@@ -320,10 +358,10 @@ function sseHeaders() {
 }
 
 export const streamChat = httpAction(async (ctx, request) => {
-  const { sessionId, content, model, messageHistory, workoutSessionId, images } = await request.json();
+  const { sessionId, content, model, messageHistory, workoutSessionId, workoutState, images } = await request.json();
 
   const systemPrompt = workoutSessionId
-    ? getWorkoutSystemPrompt(workoutSessionId)
+    ? getWorkoutSystemPrompt(workoutSessionId, workoutState)
     : SYSTEM_PROMPT;
 
   // Format current user message — multimodal if images attached

@@ -248,6 +248,14 @@ export default function WorkoutPage() {
           model: selectedModel,
           messageHistory,
           workoutSessionId: activeSession?._id,
+          workoutState: activeSession?._id ? {
+            exercises: exercises.map(ex => ({
+              name: ex.name,
+              sets: ex.sets.map((s: any) => ({ weight: s.weight, reps: s.reps })),
+            })),
+            activeSet: liveTiming?.activeSet ?? null,
+            isResting: liveTiming?.activeRest != null,
+          } : undefined,
         }),
       });
 
@@ -321,8 +329,10 @@ export default function WorkoutPage() {
     activeChatSessionId,
     activeSession?._id,
     chatMessages,
+    exercises,
     flushStreamingContent,
     isStreaming,
+    liveTiming,
     selectedModel,
     sendChatMessage,
   ]);
