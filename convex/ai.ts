@@ -35,7 +35,7 @@ function formatWorkoutState(workoutState?: WorkoutState): string {
   const lines: string[] = ["", "CURRENT WORKOUT STATE:"];
 
   if (workoutState.activeSet) {
-    const elapsed = Math.round((Date.now() - workoutState.activeSet.startedAt) / 1000);
+    const elapsed = Math.max(0, Math.round((Date.now() - workoutState.activeSet.startedAt) / 1000));
     const weightStr = workoutState.activeSet.weight ? ` at ${workoutState.activeSet.weight} lbs` : "";
     lines.push(`- Active set: ${workoutState.activeSet.exerciseName}${weightStr} (started ${elapsed}s ago)`);
   } else if (workoutState.isResting) {
@@ -358,11 +358,37 @@ function sseHeaders() {
 }
 
 export const streamChat = httpAction(async (ctx, request) => {
-  const { sessionId, content, model, messageHistory, workoutSessionId, workoutState, images } = await request.json();
+  const { sessionId, content, model, messageHistory, workoutSessionId, images } = await request.json();
 
-  const systemPrompt = workoutSessionId
-    ? getWorkoutSystemPrompt(workoutSessionId, workoutState)
-    : SYSTEM_PROMPT;
+  let systemPrompt = SYSTEM_PROMPT;
+  if (workoutSessionId) {
+    // Fetch workout state server-side from DB (never trust client-supplied state)
+    let workoutState: WorkoutState | undefined;
+    try {
+      const session = await ctx.runQuery(api.workoutSessions.getWithExercises, {
+        sessionId: workoutSessionId as Id<"workoutSessions">,
+      });
+      if (session) {
+        workoutState = {
+          exercises: session.exercises.map((ex: any) => ({
+            name: ex.name,
+            sets: (ex.sets as any[]).map((s: any) => ({ weight: s.weight, reps: s.reps })),
+          })),
+          activeSet: session.activeSet
+            ? {
+                exerciseName: session.activeSet.exerciseName,
+                weight: session.activeSet.weight ?? null,
+                startedAt: session.activeSet.startedAt,
+              }
+            : null,
+          isResting: session.activeRestStartedAt != null,
+        };
+      }
+    } catch {
+      // If query fails, proceed without state
+    }
+    systemPrompt = getWorkoutSystemPrompt(workoutSessionId, workoutState);
+  }
 
   // Format current user message — multimodal if images attached
   const userMessage = images && images.length > 0
