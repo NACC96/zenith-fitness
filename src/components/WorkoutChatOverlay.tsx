@@ -545,14 +545,21 @@ function WorkoutChatOverlayImpl({
         style={{ display: "none" }}
       />
 
-      {isOpen && (
-        <div className="fixed inset-0 z-[75]">
+      <div
+        className="fixed inset-0 z-[75]"
+        style={{
+          visibility: isOpen ? "visible" : "hidden",
+          pointerEvents: isOpen ? "auto" : "none",
+        }}
+        aria-hidden={!isOpen}
+      >
           <button
             type="button"
             className="absolute inset-0"
             aria-label="Close chat overlay"
             style={{ background: "transparent", backdropFilter: "none" }}
             onClick={onClose}
+            tabIndex={isOpen ? 0 : -1}
           />
 
           <div
@@ -698,7 +705,16 @@ function WorkoutChatOverlayImpl({
                       }}
                     >
                       {streamingContent ? (
-                        <ChatMarkdown content={streamingContent} />
+                        <p
+                          className="text-sm leading-relaxed whitespace-pre-wrap"
+                          style={{
+                            color: "#ebebeb",
+                            fontFamily: "var(--font-sans)",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {streamingContent}
+                        </p>
                       ) : (
                         <>
                           <span className="chat-dot" style={{ animationDelay: "0ms" }} />
@@ -877,7 +893,6 @@ function WorkoutChatOverlayImpl({
             </div>
           </div>
         </div>
-      )}
     </Portal>
   );
 }

@@ -369,7 +369,7 @@ export const streamChat = httpAction(async (ctx, request) => {
   ];
   const reasoning = mandatoryReasoningModels.includes(model)
     ? undefined
-    : { effort: "high" as const };
+    : { effort: "low" as const };
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -491,49 +491,56 @@ export const streamChat = httpAction(async (ctx, request) => {
               tool_calls: toolCalls,
             });
 
-            for (const tc of toolCalls) {
-              const toolName = tc.function.name;
-              let toolArgs;
-              try {
-                toolArgs = JSON.parse(tc.function.arguments);
-              } catch {
-                toolArgs = {};
-              }
-
-              let result: string;
-              try {
-                if (toolName === "logExercise") {
-                  result = await handleLogExercise(ctx, toolArgs, workoutSessionId);
-                } else if (toolName === "getWorkoutHistory") {
-                  result = await handleGetHistory(ctx, toolArgs);
-                } else if (toolName === "getExerciseStats") {
-                  result = await handleGetStats(ctx, toolArgs);
-                } else if (toolName === "createWorkoutType") {
-                  result = await handleCreateType(ctx, toolArgs);
-                } else if (toolName === "deleteWorkout") {
-                  result = await handleDeleteWorkout(ctx, toolArgs);
-                } else if (toolName === "deleteExercise") {
-                  result = await handleDeleteExercise(ctx, toolArgs);
-                } else if (toolName === "deleteSet") {
-                  result = await handleDeleteSet(ctx, toolArgs);
-                } else if (toolName === "startSet") {
-                  result = await handleStartSet(ctx, toolArgs, workoutSessionId);
-                } else if (toolName === "completeSet") {
-                  result = await handleCompleteSet(ctx, toolArgs, workoutSessionId);
-                } else if (toolName === "setWorkoutType") {
-                  result = await handleSetWorkoutType(ctx, toolArgs, workoutSessionId);
-                } else {
-                  result = JSON.stringify({ error: `Unknown tool: ${toolName}` });
+            // Execute all tool calls in parallel for faster response
+            const toolResults = await Promise.all(
+              toolCalls.map(async (tc) => {
+                const toolName = tc.function.name;
+                let toolArgs;
+                try {
+                  toolArgs = JSON.parse(tc.function.arguments);
+                } catch {
+                  toolArgs = {};
                 }
-              } catch (e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : String(e);
-                result = JSON.stringify({ error: errorMessage });
-              }
 
+                let result: string;
+                try {
+                  if (toolName === "logExercise") {
+                    result = await handleLogExercise(ctx, toolArgs, workoutSessionId);
+                  } else if (toolName === "getWorkoutHistory") {
+                    result = await handleGetHistory(ctx, toolArgs);
+                  } else if (toolName === "getExerciseStats") {
+                    result = await handleGetStats(ctx, toolArgs);
+                  } else if (toolName === "createWorkoutType") {
+                    result = await handleCreateType(ctx, toolArgs);
+                  } else if (toolName === "deleteWorkout") {
+                    result = await handleDeleteWorkout(ctx, toolArgs);
+                  } else if (toolName === "deleteExercise") {
+                    result = await handleDeleteExercise(ctx, toolArgs);
+                  } else if (toolName === "deleteSet") {
+                    result = await handleDeleteSet(ctx, toolArgs);
+                  } else if (toolName === "startSet") {
+                    result = await handleStartSet(ctx, toolArgs, workoutSessionId);
+                  } else if (toolName === "completeSet") {
+                    result = await handleCompleteSet(ctx, toolArgs, workoutSessionId);
+                  } else if (toolName === "setWorkoutType") {
+                    result = await handleSetWorkoutType(ctx, toolArgs, workoutSessionId);
+                  } else {
+                    result = JSON.stringify({ error: `Unknown tool: ${toolName}` });
+                  }
+                } catch (e: unknown) {
+                  const errorMessage = e instanceof Error ? e.message : String(e);
+                  result = JSON.stringify({ error: errorMessage });
+                }
+
+                return { tool_call_id: tc.id, content: result };
+              })
+            );
+
+            for (const toolResult of toolResults) {
               currentMessages.push({
                 role: "tool",
-                tool_call_id: tc.id,
-                content: result,
+                tool_call_id: toolResult.tool_call_id,
+                content: toolResult.content,
               });
             }
 
@@ -609,8 +616,8 @@ async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string)
     }
     sessionId = targetSessionId as Id<"workoutSessions">;
   } else {
-    // Original behavior: find or create session by date+type
-    const sessions = await ctx.runQuery(api.workoutSessions.listAll);
+    // Find or create session by date+type — use recent sessions instead of all
+    const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: 30 });
     const session = sessions.find(
       (s: any) => s.date === args.date && s.type === args.type
     );
@@ -650,14 +657,16 @@ async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string)
 }
 
 async function handleGetHistory(ctx: any, args: any): Promise<string> {
-  const sessions = await ctx.runQuery(api.workoutSessions.listAll);
+  const limit = args.limit || 10;
+  // Fetch only the amount we need (with headroom for type filtering)
+  const fetchLimit = args.type ? limit * 3 : limit;
+  const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: fetchLimit });
   let filtered = sessions;
   if (args.type) {
     filtered = sessions.filter(
       (s: any) => s.type.toLowerCase() === args.type.toLowerCase()
     );
   }
-  const limit = args.limit || 10;
   const limited = filtered.slice(0, limit);
 
   return JSON.stringify(
@@ -679,7 +688,8 @@ async function handleGetHistory(ctx: any, args: any): Promise<string> {
 }
 
 async function handleGetStats(ctx: any, args: any): Promise<string> {
-  const sessions = await ctx.runQuery(api.workoutSessions.listAll);
+  // Fetch recent sessions instead of all sessions for faster response
+  const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: 50 });
   const searchName = args.exerciseName.toLowerCase();
 
   const matches: any[] = [];
@@ -748,7 +758,7 @@ async function handleDeleteWorkout(ctx: any, args: any): Promise<string> {
   if (args.sessionId) {
     sessionId = args.sessionId as Id<"workoutSessions">;
   } else if (args.date || args.type) {
-    const sessions = await ctx.runQuery(api.workoutSessions.listAll);
+    const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: 30 });
     const match = sessions.find(
       (s: any) =>
         (!args.date || s.date === args.date) &&

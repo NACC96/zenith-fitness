@@ -227,10 +227,11 @@ export default function WorkoutPage() {
         model: selectedModel,
       });
 
+      // Strip images from history to reduce payload size — the AI doesn't need
+      // to re-see old images, only the current message's images matter.
       const messageHistory: StreamHistoryMessage[] = chatMessages.slice(-20).map((message) => ({
         role: message.role,
         content: message.content,
-        ...(message.images ? { images: message.images } : {}),
       }));
 
       const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
