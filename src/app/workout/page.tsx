@@ -251,7 +251,7 @@ export default function WorkoutPage() {
           workoutState: activeSession?._id ? {
             exercises: exercises.map(ex => ({
               name: ex.name,
-              sets: ex.sets.map((s: any) => ({ weight: s.weight, reps: s.reps })),
+              sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })),
             })),
             activeSet: liveTiming?.activeSet ?? null,
             isResting: liveTiming?.activeRest != null,
