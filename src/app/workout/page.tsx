@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import WorkoutFocusPanel, { type WorkoutFocusState } from "@/components/WorkoutFocusPanel";
+import WorkoutFocusPanel from "@/components/WorkoutFocusPanel";
 import WorkoutExerciseHistorySheet from "@/components/WorkoutExerciseHistorySheet";
 import WorkoutChatOverlay, { type WorkoutChatMessage } from "@/components/WorkoutChatOverlay";
 import type { FeedExercise, LatestCompletedSet } from "@/components/workout/types";
@@ -84,6 +84,7 @@ export default function WorkoutPage() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [loggedSetSeq, setLoggedSetSeq] = useState(0);
 
   const activeSession = useQuery(api.workoutSessions.getActive);
   const createActiveSession = useMutation(api.workoutSessions.createActive);
@@ -107,40 +108,32 @@ export default function WorkoutPage() {
   const chatMessages = useMemo(() => (chatMessagesRaw ?? []) as WorkoutChatMessage[], [chatMessagesRaw]);
   const exercises = useMemo(() => (exercisesRaw ?? []) as ExerciseDoc[], [exercisesRaw]);
 
+  // Tick for the header workout elapsed timer only (focus panel has its own).
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNowMs(Date.now());
-    }, 1000);
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const syncNow = () => {
-      setNowMs(Date.now());
-    };
-
-    document.addEventListener("visibilitychange", syncNow);
-    window.addEventListener("focus", syncNow);
-
+    const sync = () => setNowMs(Date.now());
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("focus", sync);
     return () => {
-      document.removeEventListener("visibilitychange", syncNow);
-      window.removeEventListener("focus", syncNow);
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("focus", sync);
     };
   }, []);
 
+  // Auto-create workout session on mount.
   useEffect(() => {
     if (!shouldAutoCreateSession || activeSession !== null || requestingSession) return;
-
     setRequestingSession(true);
     void createActiveSession({ type: "General" })
-      .catch((error) => {
-        console.error("Failed to create active session:", error);
-      })
-      .finally(() => {
-        setRequestingSession(false);
-      });
+      .catch((error) => console.error("Failed to create active session:", error))
+      .finally(() => setRequestingSession(false));
   }, [activeSession, createActiveSession, requestingSession, shouldAutoCreateSession]);
 
+  // Auto-create chat session for the workout.
   useEffect(() => {
     if (!activeSession?._id) {
       setActiveChatSessionId(null);
@@ -161,21 +154,15 @@ export default function WorkoutPage() {
         setActiveChatSessionId(sessionId);
         window.sessionStorage.setItem(storageKey, sessionId);
       })
-      .catch((error) => {
-        console.error("Failed to create workout chat session:", error);
-      })
-      .finally(() => {
-        setCreatingChatSession(false);
-      });
+      .catch((error) => console.error("Failed to create workout chat session:", error))
+      .finally(() => setCreatingChatSession(false));
   }, [activeSession?._id, activeChatSessionId, creatingChatSession, createChatSession]);
 
+  // Streaming content flush for chat.
   const flushStreamingContent = useCallback((content: string, immediate = false) => {
     const flush = () => {
       streamFlushTimeoutRef.current = null;
       setStreamingContent(streamPendingContentRef.current);
-      if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
-        performance.mark("workout-chat-stream-commit");
-      }
     };
 
     streamPendingContentRef.current = content;
@@ -213,9 +200,6 @@ export default function WorkoutPage() {
     }
     const imagesToSend = images && images.length > 0 ? images : undefined;
     isSendingRef.current = true;
-    if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
-      performance.mark("workout-chat-stream-start");
-    }
     setIsStreaming(true);
     setStreamingContent("");
 
@@ -227,8 +211,6 @@ export default function WorkoutPage() {
         model: selectedModel,
       });
 
-      // Strip images from history to reduce payload size — the AI doesn't need
-      // to re-see old images, only the current message's images matter.
       const messageHistory: StreamHistoryMessage[] = chatMessages.slice(-20).map((message) => ({
         role: message.role,
         content: message.content,
@@ -313,9 +295,6 @@ export default function WorkoutPage() {
       isSendingRef.current = false;
       setIsStreaming(false);
       setStreamingContent("");
-      if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
-        performance.mark("workout-chat-stream-end");
-      }
     }
   }, [
     activeChatSessionId,
@@ -326,6 +305,8 @@ export default function WorkoutPage() {
     selectedModel,
     sendChatMessage,
   ]);
+
+  // --- Derived state ---
 
   const hasFirstSetTiming =
     liveTiming?.firstSetStartedAt !== null &&
@@ -339,14 +320,8 @@ export default function WorkoutPage() {
     return Math.max(0, endMs - workoutStartMs);
   }, [liveTiming?.lastSetEndedAt, liveTiming?.status, nowMs, workoutStartMs]);
 
-  const activeSetElapsedMs = liveTiming?.activeSet
-    ? Math.max(0, nowMs - liveTiming.activeSet.startedAt)
-    : null;
-  const activeRestElapsedMs = liveTiming?.activeRest
-    ? Math.max(0, nowMs - liveTiming.activeRest.startedAt)
-    : null;
-  const lastRestMs = useMemo(() => getLastRestDurationMs(exercises), [exercises]);
   const feedExercises = useMemo(() => mapFeedExercises(exercises), [exercises]);
+  const lastRestMs = useMemo(() => getLastRestDurationMs(exercises), [exercises]);
   const totalSetCount = useMemo(
     () => feedExercises.reduce((sum, exercise) => sum + exercise.sets.length, 0),
     [feedExercises],
@@ -361,6 +336,7 @@ export default function WorkoutPage() {
       ),
     [feedExercises],
   );
+
   const latestCompletedSet = useMemo<LatestCompletedSet | null>(() => {
     let latest: LatestCompletedSet | null = null;
     for (const exercise of feedExercises) {
@@ -393,14 +369,24 @@ export default function WorkoutPage() {
       endedAt: fallbackSet.endedAt ?? null,
     };
   }, [feedExercises]);
-  const focusState: WorkoutFocusState = useMemo(() => {
-    if (liveTiming?.activeSet) return "activeSet";
-    if (activeRestElapsedMs !== null) return "rest";
-    if (totalSetCount > 0) return "ready";
-    return "empty";
-  }, [liveTiming?.activeSet, activeRestElapsedMs, totalSetCount]);
+
+  // Use the server-computed phase directly — no client-side derivation.
+  // This fixes the race condition where activeSet and activeRestStartedAt
+  // could be in inconsistent states during Convex real-time updates.
+  const phase = liveTiming?.phase ?? "idle";
+  const isEmpty = (liveTiming?.totalSets ?? 0) === 0;
+
   const activeExerciseName =
     liveTiming?.activeSet?.exerciseName ?? latestCompletedSet?.exerciseName ?? null;
+
+  // Weight to pre-fill: active set weight > last completed set weight (same exercise).
+  const activeSetWeight = liveTiming?.activeSet?.weight
+    ?? (activeExerciseName && activeExerciseName === latestCompletedSet?.exerciseName
+        ? latestCompletedSet?.weight
+        : null)
+    ?? null;
+
+  // --- Handlers ---
 
   const handleExitWorkout = async () => {
     if (!activeSession) return;
@@ -434,43 +420,35 @@ export default function WorkoutPage() {
     }
   };
 
-  const openChat = useCallback(() => {
-    setIsChatOpen(true);
-  }, []);
-
-  const closeChat = useCallback(() => {
-    if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
-      performance.mark("workout-chat-close-click");
-    }
-    setIsChatOpen(false);
-  }, []);
-
+  const openChat = useCallback(() => setIsChatOpen(true), []);
+  const closeChat = useCallback(() => setIsChatOpen(false), []);
   const openHistory = useCallback(() => {
     setIsChatOpen(false);
     setIsHistoryOpen(true);
   }, []);
 
+  // Complete set from the UI form. Explicitly pass the exercise name so the
+  // backend doesn't depend on activeSet still being present (race condition fix).
   const handleCompleteSetFromUI = useCallback(async (weight: number, reps: number) => {
     if (!activeSession) return;
+    const exerciseName = activeExerciseName;
     try {
       await completeSetMutation({
         sessionId: activeSession._id,
         weight,
         reps,
+        ...(exerciseName ? { exerciseName } : {}),
       });
+      // Increment sequence to trigger the "Set logged" flash in the focus panel.
+      setLoggedSetSeq((prev) => prev + 1);
     } catch (err) {
       console.error("Failed to complete set:", err);
     }
-  }, [activeSession, completeSetMutation]);
-
-  const activeSetWeight = liveTiming?.activeSet?.weight
-    ?? (activeExerciseName && activeExerciseName === latestCompletedSet?.exerciseName
-        ? latestCompletedSet?.weight
-        : null)
-    ?? null;
+  }, [activeSession, activeExerciseName, completeSetMutation]);
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden" style={{ background: "#0a0a0a" }}>
+      {/* Header bar */}
       <div
         className="shrink-0 flex items-center justify-between gap-3 px-4 py-3"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
@@ -573,12 +551,14 @@ export default function WorkoutPage() {
         </motion.button>
       </div>
 
+      {/* Focus panel — uses server-computed phase, no client-derived state */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <WorkoutFocusPanel
-          focusState={focusState}
+          phase={phase}
+          isEmpty={isEmpty}
           activeExerciseName={activeExerciseName}
-          activeSetElapsedMs={activeSetElapsedMs}
-          activeRestMs={activeRestElapsedMs}
+          activeSetStartedAt={liveTiming?.activeSet?.startedAt ?? null}
+          activeRestStartedAt={liveTiming?.activeRestStartedAt ?? null}
           lastRestMs={lastRestMs}
           latestCompletedSet={latestCompletedSet}
           exerciseCount={feedExercises.length}
@@ -587,6 +567,7 @@ export default function WorkoutPage() {
           onOpenHistory={openHistory}
           activeSetWeight={activeSetWeight}
           onCompleteSet={handleCompleteSetFromUI}
+          loggedSetSeq={loggedSetSeq}
         />
       </div>
 
