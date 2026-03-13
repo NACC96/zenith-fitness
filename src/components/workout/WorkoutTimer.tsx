@@ -16,7 +16,7 @@ export default function WorkoutTimer({ mode }: WorkoutTimerProps) {
 
   const startTime =
     mode === "rest"
-      ? timingState?.activeRest?.startedAt
+      ? timingState?.activeRestStartedAt
       : timingState?.firstSetStartedAt;
 
   const { displayRef, subscribe } = useAnimationTimer(startTime ?? null);
