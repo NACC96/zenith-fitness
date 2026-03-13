@@ -213,40 +213,52 @@ export const getActive = query({
   },
 });
 
-// Read live timing state for an active workout session
+// Read live timing state for an active workout session.
+// Returns a server-computed `phase` so the client never has to derive focus
+// state from separate activeSet / activeRest flags (which caused race-condition
+// bugs where the timer showed "rest" during a set or vice-versa).
 export const getLiveTimingState = query({
   args: { sessionId: v.id("workoutSessions") },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
 
-    const now = Date.now();
     const workoutStartedAt = session.firstSetStartedAt;
     const workoutEndedAt = session.lastSetEndedAt;
+
+    // Count completed sets so the client can distinguish "no sets yet" from
+    // "between sets" without a separate query.
+    const exercises = await ctx.db
+      .query("exercises")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+    const totalSets = exercises.reduce((n, ex) => n + ex.sets.length, 0);
+
+    // Derive phase server-side — single source of truth.
+    let phase: "idle" | "active" | "resting";
+    if (session.activeSet) {
+      phase = "active";
+    } else if (session.activeRestStartedAt !== undefined) {
+      phase = "resting";
+    } else {
+      phase = "idle";
+    }
 
     return {
       sessionId: session._id,
       status: session.status ?? null,
+      phase,
+      totalSets,
       firstSetStartedAt: workoutStartedAt ?? null,
       lastSetEndedAt: workoutEndedAt ?? null,
-      workoutElapsedMs:
-        workoutStartedAt === undefined
-          ? null
-          : Math.max(0, (workoutEndedAt ?? now) - workoutStartedAt),
       activeSet: session.activeSet
         ? {
             exerciseName: session.activeSet.exerciseName,
             startedAt: session.activeSet.startedAt,
             weight: session.activeSet.weight ?? null,
-            elapsedMs: Math.max(0, now - session.activeSet.startedAt),
           }
         : null,
-      activeRest: session.activeRestStartedAt
-        ? {
-            startedAt: session.activeRestStartedAt,
-            elapsedMs: Math.max(0, now - session.activeRestStartedAt),
-          }
-        : null,
+      activeRestStartedAt: session.activeRestStartedAt ?? null,
     };
   },
 });
@@ -274,18 +286,17 @@ export const finishActive = mutation({
         ? undefined
         : formatDurationMinutes(Math.max(0, timingEnd - timingStart));
 
-    const patch: {
-      status: "completed";
-      duration?: string;
-      firstSetStartedAt?: number;
-      lastSetEndedAt?: number;
-      activeSet: undefined;
-      activeRestStartedAt: undefined;
-    } = {
-      status: "completed",
+    const patch: Record<string, unknown> = {
+      status: "completed" as const,
       activeSet: undefined,
       activeRestStartedAt: undefined,
     };
+
+    // Generate a proper label from the date so completed sessions show nicely
+    // on the dashboard instead of staying as "Active Workout".
+    if (session.label === "Active Workout" && session.date) {
+      patch.label = formatSessionLabel(session.date);
+    }
 
     const resolvedDuration = duration ?? session.duration;
     if (resolvedDuration !== undefined) patch.duration = resolvedDuration;

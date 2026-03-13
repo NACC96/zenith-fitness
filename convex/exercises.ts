@@ -227,9 +227,30 @@ export const completeSet = mutation({
     if (!session) throw new Error("Session not found");
 
     const now = Date.now();
-    const exerciseName = args.exerciseName ?? session.activeSet?.exerciseName;
+
+    // Resolve exercise name: explicit arg > active set > last logged exercise.
+    // This prevents the "exerciseName is required" crash when the active set
+    // was already cleared by a race condition (e.g. AI and UI both calling
+    // completeSet, or a Convex real-time lag).
+    let exerciseName = args.exerciseName ?? session.activeSet?.exerciseName;
     if (!exerciseName) {
-      throw new Error("exerciseName is required when no active set is started");
+      // Fallback: use the most recently logged exercise in this session.
+      const exercises = await collectSessionExercises(ctx, args.sessionId);
+      if (exercises.length > 0) {
+        // Find exercise with the latest endedAt timestamp
+        let latest: { name: string; endedAt: number } | null = null;
+        for (const ex of exercises) {
+          for (const set of ex.sets as TimedSet[]) {
+            if (set.endedAt !== undefined && (!latest || set.endedAt > latest.endedAt)) {
+              latest = { name: ex.name, endedAt: set.endedAt };
+            }
+          }
+        }
+        exerciseName = latest?.name ?? exercises[exercises.length - 1].name;
+      }
+    }
+    if (!exerciseName) {
+      throw new Error("exerciseName is required when no active set is started and no exercises exist");
     }
 
     const startedAt = session.activeSet?.startedAt ?? now;
@@ -241,9 +262,14 @@ export const completeSet = mutation({
       await closeOpenRestFromList(ctx, exercises, startedAt);
     }
 
+    const roundedReps = Math.round(args.reps);
+    if (roundedReps < 1) {
+      throw new Error("reps must be at least 1");
+    }
+
     const completedSet: TimedSet = {
       weight: args.weight,
-      reps: args.reps,
+      reps: roundedReps,
       startedAt,
       endedAt: now,
       restStartedAt: now,

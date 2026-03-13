@@ -12,9 +12,11 @@ import type * as ai from "../ai.js";
 import type * as chatMessages from "../chatMessages.js";
 import type * as chatSessions from "../chatSessions.js";
 import type * as exercises from "../exercises.js";
+import type * as exerciseSuggestions from "../exerciseSuggestions.js";
 import type * as http from "../http.js";
 import type * as init from "../init.js";
 import type * as settings from "../settings.js";
+import type * as workoutMetrics from "../workoutMetrics.js";
 import type * as workoutSessions from "../workoutSessions.js";
 import type * as workoutTypes from "../workoutTypes.js";
 
@@ -29,9 +31,11 @@ declare const fullApi: ApiFromModules<{
   chatMessages: typeof chatMessages;
   chatSessions: typeof chatSessions;
   exercises: typeof exercises;
+  exerciseSuggestions: typeof exerciseSuggestions;
   http: typeof http;
   init: typeof init;
   settings: typeof settings;
+  workoutMetrics: typeof workoutMetrics;
   workoutSessions: typeof workoutSessions;
   workoutTypes: typeof workoutTypes;
 }>;
