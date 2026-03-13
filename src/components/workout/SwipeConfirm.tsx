@@ -44,8 +44,8 @@ export default function SwipeConfirm({
     if (!isDragging || disabled) return;
     setIsDragging(false);
 
-    const containerWidth = containerRef.current?.offsetWidth ?? 300;
-    const pct = (dragX / containerWidth) * 100;
+    const freshWidth = containerRef.current?.offsetWidth ?? 300;
+    const pct = (dragX / freshWidth) * 100;
 
     if (pct >= threshold && !confirmedRef.current) {
       confirmedRef.current = true;

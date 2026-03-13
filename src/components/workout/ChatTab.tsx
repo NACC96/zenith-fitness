@@ -11,7 +11,7 @@ interface ChatTabProps {
 }
 
 export default function ChatTab({ isVisible }: ChatTabProps) {
-  const { sessionId, session, exercises } = useWorkout();
+  const { sessionId, session } = useWorkout();
   const { messages, isStreaming, streamingContent, sendMessage, pushContext } =
     useWorkoutChat(sessionId);
 
@@ -19,7 +19,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Build a plain-text summary of the current workout state for context
+  // Build workout context identifier for the chat session
   const buildWorkoutState = useCallback((): WorkoutContext => {
     return { workoutSessionId: sessionId };
   }, [sessionId]);
@@ -28,7 +28,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
   useEffect(() => {
     if (!isVisible) return;
     pushContext(buildWorkoutState());
-  }, [isVisible, pushContext, buildWorkoutState, session, exercises]);
+  }, [isVisible, pushContext, buildWorkoutState]);
 
   // Auto-scroll to bottom when messages update or streaming content changes
   useEffect(() => {
@@ -137,18 +137,20 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
             className="flex-1 resize-none overflow-hidden rounded-2xl bg-zinc-800 px-4 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 disabled:opacity-50 max-h-32"
           />
           <button
+            type="button"
             onClick={() => void handleSend()}
             disabled={!inputValue.trim() || isStreaming}
             className="flex-none w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
             aria-label="Send message"
           >
-            {/* Up-arrow icon */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
               className="w-4 h-4 text-white"
+              aria-hidden="true"
             >
+              <title>Send</title>
               <path
                 fillRule="evenodd"
                 d="M10 17a.75.75 0 0 1-.75-.75V5.56l-3.22 3.22a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L10.75 5.56v10.69A.75.75 0 0 1 10 17Z"

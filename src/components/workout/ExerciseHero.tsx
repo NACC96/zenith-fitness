@@ -1,7 +1,7 @@
 // src/components/workout/ExerciseHero.tsx
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useWorkout } from "@/contexts/WorkoutContext";
 import SwipeConfirm from "./SwipeConfirm";
 
@@ -24,13 +24,10 @@ export default function ExerciseHero({
   const [reps, setReps] = useState(lastReps ?? 8);
 
   // Sync defaults when exercise changes
-  const exerciseKey = exerciseName;
-  const [prevKey, setPrevKey] = useState(exerciseKey);
-  if (exerciseKey !== prevKey) {
-    setPrevKey(exerciseKey);
+  useEffect(() => {
     setWeight(lastWeight ?? 135);
     setReps(lastReps ?? 8);
-  }
+  }, [exerciseName, lastWeight, lastReps]);
 
   const handleConfirm = useCallback(async () => {
     if (!sessionId) return;
@@ -60,6 +57,7 @@ export default function ExerciseHero({
         {/* Weight stepper */}
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => setWeight((w) => Math.max(0, w - weightStep))}
             className="w-10 h-10 rounded-full bg-zinc-800 text-white text-xl flex items-center justify-center active:bg-zinc-700"
           >
@@ -72,6 +70,7 @@ export default function ExerciseHero({
             <div className="text-xs text-zinc-500">lbs</div>
           </div>
           <button
+            type="button"
             onClick={() => setWeight((w) => w + weightStep)}
             className="w-10 h-10 rounded-full bg-zinc-800 text-white text-xl flex items-center justify-center active:bg-zinc-700"
           >
@@ -84,6 +83,7 @@ export default function ExerciseHero({
         {/* Reps stepper */}
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => setReps((r) => Math.max(1, r - 1))}
             className="w-10 h-10 rounded-full bg-zinc-800 text-white text-xl flex items-center justify-center active:bg-zinc-700"
           >
@@ -96,6 +96,7 @@ export default function ExerciseHero({
             <div className="text-xs text-zinc-500">reps</div>
           </div>
           <button
+            type="button"
             onClick={() => setReps((r) => r + 1)}
             className="w-10 h-10 rounded-full bg-zinc-800 text-white text-xl flex items-center justify-center active:bg-zinc-700"
           >

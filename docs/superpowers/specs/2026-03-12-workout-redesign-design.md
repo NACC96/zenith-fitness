@@ -20,7 +20,7 @@ Replace the monolithic workout page with two swipeable tabs: **Track** and **Cha
 
 Each tab lazy-loads independently. Only the visible tab renders actively. Shared state (active session ID, exercises) lives in a lightweight React context — not duplicated queries.
 
-```
+```text
 WorkoutPage (thin shell — session lifecycle + tab state)
 ├── TabBar (Track | Chat, swipeable)
 ├── TrackTab (lazy)

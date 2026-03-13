@@ -122,7 +122,7 @@ export function useWorkoutChat(
 
     const storageKey = `workout-chat-session:${workoutSessionId}`;
     const storedSessionId = window.sessionStorage.getItem(storageKey);
-    if (storedSessionId) {
+    if (storedSessionId && storedSessionId.length > 0) {
       setActiveChatSessionId(storedSessionId as Id<"chatSessions">);
       return;
     }
@@ -224,6 +224,10 @@ export function useWorkoutChat(
         const baseUrl =
           siteUrl ||
           (process.env.NEXT_PUBLIC_CONVEX_URL?.replace(".cloud", ".site") ?? "");
+
+        if (!baseUrl) {
+          throw new Error("Convex site URL not configured. Set NEXT_PUBLIC_CONVEX_SITE_URL or NEXT_PUBLIC_CONVEX_URL.");
+        }
 
         // 4. Fire the SSE request
         const response = await fetch(`${baseUrl}/api/chat`, {

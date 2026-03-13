@@ -27,8 +27,8 @@ export default function CompletedSets() {
           >
             <span className="text-sm text-white">{ex.name}</span>
             <span className="text-sm text-zinc-500">
-              {ex.sets.length} × {formatNum(ex.sets[0]?.weight ?? 0)}×
-              {ex.sets[0]?.reps ?? 0}
+              {ex.sets.length} × {formatNum(ex.sets[ex.sets.length - 1]?.weight ?? 0)}×
+              {ex.sets[ex.sets.length - 1]?.reps ?? 0}
             </span>
           </div>
         ))}

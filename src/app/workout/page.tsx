@@ -36,6 +36,7 @@ function StartWorkoutScreen({
         <p className="text-sm text-zinc-500">Loading workout types…</p>
       ) : workoutTypes.length === 0 ? (
         <button
+          type="button"
           onClick={() => onStart({ type: "General" })}
           className="w-full max-w-xs rounded-2xl bg-white px-6 py-4 text-center text-sm font-semibold text-black transition-transform active:scale-95"
         >
@@ -45,6 +46,7 @@ function StartWorkoutScreen({
         <div className="flex w-full max-w-xs flex-col gap-3">
           {workoutTypes.map((wt) => (
             <button
+              type="button"
               key={wt._id}
               onClick={() => onStart({ workoutTypeId: wt._id, type: wt.name })}
               className="w-full rounded-2xl bg-zinc-900 px-6 py-4 text-center text-sm font-semibold text-white border border-zinc-800 transition-transform active:scale-95"
@@ -93,10 +95,11 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
     if (!confirm("Exit and delete this workout session?")) return;
     try {
       await removeSession({ sessionId });
+      router.push("/dashboard");
     } catch (err) {
       console.error("Failed to delete session:", err);
+      return;
     }
-    router.push("/dashboard");
   }, [removeSession, router, sessionId]);
 
   return (
@@ -108,6 +111,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
           <button
+            type="button"
             onClick={() => void handleExit()}
             className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-white"
             style={{
@@ -119,6 +123,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
           </button>
 
           <button
+            type="button"
             onClick={() => void handleFinish()}
             disabled={isFinishing}
             className="rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"

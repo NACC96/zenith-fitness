@@ -262,9 +262,14 @@ export const completeSet = mutation({
       await closeOpenRestFromList(ctx, exercises, startedAt);
     }
 
+    const roundedReps = Math.round(args.reps);
+    if (roundedReps < 1) {
+      throw new Error("reps must be at least 1");
+    }
+
     const completedSet: TimedSet = {
       weight: args.weight,
-      reps: Math.round(args.reps), // Ensure integer reps
+      reps: roundedReps,
       startedAt,
       endedAt: now,
       restStartedAt: now,

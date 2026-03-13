@@ -26,6 +26,7 @@ export const suggestNext = query({
     const exerciseOrder: Map<string, { count: number; avgPosition: number }> =
       new Map();
 
+    const exercisesBySession = new Map<string, typeof currentExercises>();
     for (const pastSession of recentSessions) {
       if (pastSession._id === sessionId) continue;
 
@@ -35,6 +36,7 @@ export const suggestNext = query({
           q.eq("sessionId", pastSession._id)
         )
         .collect();
+      exercisesBySession.set(pastSession._id, pastExercises);
 
       pastExercises.forEach((ex, index) => {
         const name = ex.name.toLowerCase();
@@ -64,12 +66,8 @@ export const suggestNext = query({
     // Return original casing from most recent occurrence
     const suggestedName = candidates[0][0];
     for (const pastSession of recentSessions) {
-      const pastExercises = await ctx.db
-        .query("exercises")
-        .withIndex("by_session", (q) =>
-          q.eq("sessionId", pastSession._id)
-        )
-        .collect();
+      const pastExercises = exercisesBySession.get(pastSession._id);
+      if (!pastExercises) continue;
       const match = pastExercises.find(
         (e) => e.name.toLowerCase() === suggestedName
       );

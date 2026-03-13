@@ -54,6 +54,7 @@ export default function TabBar({ activeTab, onTabChange }: TabBarProps) {
       <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-800 z-10">
         <div className="flex justify-center gap-12 py-3 pb-safe">
           <button
+            type="button"
             onClick={() => onTabChange("track")}
             className={`text-sm font-semibold transition-colors ${
               activeTab === "track" ? "text-white" : "text-zinc-600"
@@ -62,6 +63,7 @@ export default function TabBar({ activeTab, onTabChange }: TabBarProps) {
             Track
           </button>
           <button
+            type="button"
             onClick={() => onTabChange("chat")}
             className={`text-sm font-semibold transition-colors ${
               activeTab === "chat" ? "text-white" : "text-zinc-600"

@@ -1,0 +1,95 @@
+<h2>Set Logging Flow</h2>
+<p class="subtitle">The core interaction — logging a set between reps. Which flow?</p>
+
+<div class="cards">
+  <div class="card" data-choice="one-tap" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111;color:#fff;border-radius:12px;padding:16px;font-family:system-ui;max-width:320px;margin:0 auto;">
+        <div style="font-size:13px;color:#888;margin-bottom:16px;text-align:center;">FLOW: One-Tap Default</div>
+
+        <!-- Step 1 -->
+        <div style="background:#1a1a1a;border-radius:10px;padding:14px;margin-bottom:8px;">
+          <div style="font-size:11px;color:#22c55e;margin-bottom:6px;">① RESTING — timer running</div>
+          <div style="text-align:center;">
+            <div style="font-size:40px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums;">1:42</div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div style="background:#1a1a1a;border-radius:10px;padding:14px;margin-bottom:8px;">
+          <div style="font-size:11px;color:#22c55e;margin-bottom:6px;">② TAP big button → set logged instantly</div>
+          <div style="background:#2563eb;border-radius:10px;padding:14px;text-align:center;">
+            <div style="font-weight:700;font-size:17px;">Log 135 × 8</div>
+            <div style="font-size:11px;color:#93c5fd;margin-top:2px;">Pre-filled from last set</div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div style="background:#1a1a1a;border-radius:10px;padding:14px;">
+          <div style="font-size:11px;color:#22c55e;margin-bottom:6px;">③ Done — rest timer auto-starts</div>
+          <div style="text-align:center;">
+            <div style="font-size:13px;color:#22c55e;">✓ Set 3 logged</div>
+            <div style="font-size:11px;color:#888;margin-top:4px;">Rest timer started · 0:00</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;padding:10px;background:#0a1628;border-radius:8px;border:1px solid #1e3a5f;">
+          <div style="font-size:11px;color:#60a5fa;">To change weight/reps: long-press the button → inline editor appears</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — One-Tap Default</h3>
+      <p>Button pre-fills with last set's weight × reps. Single tap logs it and starts rest timer. Long-press opens inline editor to change values. Optimistic update — UI responds instantly, syncs in background.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="swipe-confirm" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111;color:#fff;border-radius:12px;padding:16px;font-family:system-ui;max-width:320px;margin:0 auto;">
+        <div style="font-size:13px;color:#888;margin-bottom:16px;text-align:center;">FLOW: Swipe to Confirm</div>
+
+        <!-- Step 1 -->
+        <div style="background:#1a1a1a;border-radius:10px;padding:14px;margin-bottom:8px;">
+          <div style="font-size:11px;color:#22c55e;margin-bottom:6px;">① RESTING — timer running</div>
+          <div style="text-align:center;">
+            <div style="font-size:40px;font-weight:700;color:#f59e0b;font-variant-numeric:tabular-nums;">1:42</div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div style="background:#1a1a1a;border-radius:10px;padding:14px;margin-bottom:8px;">
+          <div style="font-size:11px;color:#22c55e;margin-bottom:6px;">② Adjust weight/reps with +/- steppers</div>
+          <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin:8px 0;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:32px;height:32px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">−</div>
+              <div style="font-size:24px;font-weight:700;width:60px;text-align:center;">135</div>
+              <div style="width:32px;height:32px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">+</div>
+            </div>
+            <div style="color:#555;font-size:20px;">×</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:32px;height:32px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">−</div>
+              <div style="font-size:24px;font-weight:700;width:30px;text-align:center;">8</div>
+              <div style="width:32px;height:32px;background:#333;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;">+</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div style="background:#1a1a1a;border-radius:10px;padding:14px;">
+          <div style="font-size:11px;color:#22c55e;margin-bottom:6px;">③ Swipe right to confirm</div>
+          <div style="background:#1e293b;border-radius:10px;padding:14px;position:relative;overflow:hidden;">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:40%;background:linear-gradient(90deg,#2563eb,#2563eb80);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+              <span style="font-size:18px;">→</span>
+            </div>
+            <div style="text-align:center;font-size:14px;color:#888;">Swipe to log set</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Swipe to Confirm</h3>
+      <p>Weight and reps shown with +/- steppers for quick adjustment. Swipe right to confirm and log. Prevents accidental taps but adds one extra gesture. Good for when you frequently adjust values.</p>
+    </div>
+  </div>
+</div>

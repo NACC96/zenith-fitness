@@ -22,12 +22,14 @@ export default function ExerciseSuggestion({
           <span className="text-white font-medium">{suggestion}?</span>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={onDismiss}
               className="px-3 py-1.5 text-sm text-zinc-500 rounded-lg active:bg-zinc-800"
             >
               Skip
             </button>
             <button
+              type="button"
               onClick={() => onAccept(suggestion)}
               className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg active:bg-blue-700"
             >
