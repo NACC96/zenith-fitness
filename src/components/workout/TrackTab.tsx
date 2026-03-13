@@ -2,18 +2,33 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useWorkout } from "@/contexts/WorkoutContext";
 import WorkoutTimer from "./WorkoutTimer";
 import ExerciseHero from "./ExerciseHero";
 import ExerciseSuggestion from "./ExerciseSuggestion";
 import CompletedSets from "./CompletedSets";
+import { formatNum } from "@/lib/utils";
 
 export default function TrackTab() {
   const { session, exercises, startSet, sessionId } = useWorkout();
-  const [suggestion, setSuggestion] = useState<string | null>(null);
 
   const activeSet = session?.activeSet ?? null;
   const isResting = session?.activeRestStartedAt != null;
+
+  const metrics = useQuery(
+    api.workoutMetrics.getSessionMetrics,
+    sessionId ? { sessionId } : "skip"
+  );
+
+  const suggestion = useQuery(
+    api.exerciseSuggestions.suggestNext,
+    sessionId && !activeSet ? { sessionId } : "skip"
+  );
+
+  const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
+  const activeSuggestion = suggestion && suggestion !== dismissedSuggestion ? suggestion : null;
 
   // Determine current exercise context
   const currentExercise = useMemo(() => {
@@ -37,14 +52,13 @@ export default function TrackTab() {
     async (exerciseName: string) => {
       if (!sessionId) return;
       await startSet({ sessionId, exerciseName });
-      setSuggestion(null);
     },
     [sessionId, startSet]
   );
 
   const handleDismissSuggestion = useCallback(() => {
-    setSuggestion(null);
-  }, []);
+    if (suggestion) setDismissedSuggestion(suggestion);
+  }, [suggestion]);
 
   return (
     <div className="flex flex-col min-h-screen bg-black pb-20">
@@ -53,11 +67,9 @@ export default function TrackTab() {
         <span className="text-sm text-zinc-500">
           {session?.type ?? "Workout"}
         </span>
-        {!isResting && (
-          <span className="text-sm text-zinc-500">
-            <WorkoutTimer mode="elapsed" />
-          </span>
-        )}
+        <span className="text-sm text-zinc-500">
+          {metrics ? `${metrics.totalSets} sets · ${formatNum(metrics.totalVolume)} lbs` : ""}
+        </span>
       </div>
 
       {/* Rest timer or elapsed timer */}
@@ -79,7 +91,7 @@ export default function TrackTab() {
         />
       ) : (
         <ExerciseSuggestion
-          suggestion={suggestion}
+          suggestion={activeSuggestion ?? null}
           onAccept={handleAcceptSuggestion}
           onDismiss={handleDismissSuggestion}
         />
