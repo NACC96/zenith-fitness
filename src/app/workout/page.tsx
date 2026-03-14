@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { WorkoutProvider } from "@/contexts/WorkoutContext";
-import TabBar from "@/components/workout/TabBar";
+import TabBar, { useTabSwipe } from "@/components/workout/TabBar";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +77,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
 
   const [activeTab, setActiveTab] = useState<"track" | "chat">("track");
   const [isFinishing, setIsFinishing] = useState(false);
+  const swipeHandlers = useTabSwipe(activeTab, setActiveTab);
 
   const handleFinish = useCallback(async () => {
     if (isFinishing) return;
@@ -139,7 +140,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
         </div>
 
         {/* Tab content – both tabs stay mounted */}
-        <div className="relative flex-1 min-h-0 overflow-hidden">
+        <div className="relative flex-1 min-h-0 overflow-hidden" {...swipeHandlers}>
           <div style={{ display: activeTab === "track" ? "block" : "none" }} className="h-full overflow-y-auto">
             <Suspense fallback={<TabFallback />}>
               <TrackTab />
