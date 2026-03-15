@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useWorkout } from "@/contexts/WorkoutContext";
-import SwipeConfirm from "./SwipeConfirm";
+import ConfirmSetModal from "./ConfirmSetModal";
 
 interface ExerciseHeroProps {
   exerciseName: string;
@@ -22,6 +22,7 @@ export default function ExerciseHero({
 
   const [weight, setWeight] = useState(lastWeight ?? 135);
   const [reps, setReps] = useState(lastReps ?? 8);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Sync defaults when exercise changes
   useEffect(() => {
@@ -105,17 +106,24 @@ export default function ExerciseHero({
         </div>
       </div>
 
-      {/* Swipe to confirm */}
-      <SwipeConfirm onConfirm={handleConfirm}>
-        <div className="bg-blue-600 rounded-xl py-5 text-center">
-          <div className="font-bold text-lg text-white">
-            Log {weight} × {reps}
-          </div>
-          <div className="text-xs text-blue-300 mt-1">
-            Swipe right to confirm
-          </div>
+      {/* Log button + confirmation modal */}
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="w-full bg-blue-600 rounded-xl py-5 text-center transition-transform active:scale-[0.98]"
+      >
+        <div className="font-bold text-lg text-white">
+          Log {weight} × {reps}
         </div>
-      </SwipeConfirm>
+      </button>
+
+      <ConfirmSetModal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleConfirm}
+        weight={weight}
+        reps={reps}
+      />
     </div>
   );
 }
