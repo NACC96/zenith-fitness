@@ -70,7 +70,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
   const workoutLabel = session?.type ?? "Workout";
 
   return (
-    <div className="flex flex-col h-screen bg-black">
+    <div className="flex flex-col h-full pb-12 bg-black">
       {/* Header */}
       <div className="flex-none px-4 pt-4 pb-2 border-b border-zinc-800">
         <p className="text-sm text-zinc-500 text-center">{workoutLabel}</p>
