@@ -93,7 +93,16 @@ export function useWorkoutChat(
   const [creatingChatSession, setCreatingChatSession] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [selectedModel, setSelectedModelState] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("chat-model") || DEFAULT_MODEL;
+    }
+    return DEFAULT_MODEL;
+  });
+  const setSelectedModel = useCallback((model: string) => {
+    setSelectedModelState(model);
+    localStorage.setItem("chat-model", model);
+  }, []);
 
   // ---- Convex mutations/queries -------------------------------------------
   const createChatSession = useMutation(api.chatSessions.create);

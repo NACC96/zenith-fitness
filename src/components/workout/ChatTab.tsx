@@ -12,7 +12,7 @@ interface ChatTabProps {
 
 export default function ChatTab({ isVisible }: ChatTabProps) {
   const { sessionId, session } = useWorkout();
-  const { messages, isStreaming, streamingContent, sendMessage, pushContext } =
+  const { messages, isStreaming, streamingContent, sendMessage, pushContext, selectedModel, setSelectedModel } =
     useWorkoutChat(sessionId);
 
   const [inputValue, setInputValue] = useState("");
@@ -67,13 +67,32 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
     [],
   );
 
-  const workoutLabel = session?.type ?? "Workout";
+  const MODELS = [
+    { id: "anthropic/claude-sonnet-4.6", label: "Sonnet" },
+    { id: "x-ai/grok-4.20-beta", label: "Grok" },
+    { id: "z-ai/glm-5-turbo", label: "GLM" },
+  ] as const;
 
   return (
     <div className="flex flex-col h-full pb-12 bg-black">
-      {/* Header */}
-      <div className="flex-none px-4 pt-4 pb-2 border-b border-zinc-800">
-        <p className="text-sm text-zinc-500 text-center">{workoutLabel}</p>
+      {/* Header — model picker */}
+      <div className="flex-none px-4 pt-3 pb-2 border-b border-zinc-800">
+        <div className="flex justify-center gap-2">
+          {MODELS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setSelectedModel(m.id)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                selectedModel === m.id
+                  ? "bg-zinc-700 text-white"
+                  : "text-zinc-500 active:bg-zinc-800"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Message list */}
@@ -134,7 +153,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
             placeholder="Message…"
             rows={1}
             disabled={isStreaming}
-            className="flex-1 resize-none overflow-hidden rounded-2xl bg-zinc-800 px-4 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 disabled:opacity-50 max-h-32"
+            className="flex-1 resize-none overflow-hidden rounded-2xl bg-zinc-800 px-4 py-2 text-base text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 disabled:opacity-50 max-h-32"
           />
           <button
             type="button"
