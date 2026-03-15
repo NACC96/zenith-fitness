@@ -298,6 +298,47 @@ export const completeSet = mutation({
   },
 });
 
+export const getPreviousExercise = query({
+  args: {
+    sessionId: v.id("workoutSessions"),
+    exerciseName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+
+    // Find previous sessions of the same workout type
+    const prevSessions = await ctx.db
+      .query("workoutSessions")
+      .withIndex("by_type", (q) => q.eq("type", session.type))
+      .order("desc")
+      .take(20);
+
+    for (const prev of prevSessions) {
+      if (prev._id === args.sessionId) continue;
+
+      const exercises = await ctx.db
+        .query("exercises")
+        .withIndex("by_session", (q) => q.eq("sessionId", prev._id))
+        .collect();
+
+      const match = exercises.find(
+        (e) => e.name.toLowerCase() === args.exerciseName.toLowerCase()
+      );
+
+      if (match) {
+        return {
+          sets: match.sets.map((s) => ({ weight: s.weight, reps: s.reps })),
+          date: prev.date ?? null,
+          label: prev.label ?? null,
+        };
+      }
+    }
+
+    return null;
+  },
+});
+
 export const update = mutation({
   args: {
     exerciseId: v.id("exercises"),
