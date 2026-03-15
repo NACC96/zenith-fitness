@@ -33,12 +33,24 @@ export default function WorkoutTimer({ mode }: WorkoutTimerProps) {
   return (
     <div className="text-center">
       {isRest && (
-        <div className="text-sm text-amber-400 mb-1">RESTING</div>
+        <div
+          className="text-[10px] uppercase tracking-[0.2em] mb-2"
+          style={{
+            fontFamily: "var(--font-mono)",
+            color: "#ff2d2d",
+            textShadow: "0 0 20px rgba(255,45,45,0.4)",
+          }}
+        >
+          Resting
+        </div>
       )}
       <div
-        className={`font-bold tabular-nums tracking-tighter ${
-          isRest ? "text-6xl text-amber-400" : "text-5xl text-white"
-        }`}
+        className={`font-bold tabular-nums tracking-tighter ${isRest ? "text-6xl" : "text-5xl"}`}
+        style={{
+          fontFamily: "var(--font-display)",
+          color: isRest ? "#ff2d2d" : "rgba(255,255,255,0.9)",
+          textShadow: isRest ? "0 0 40px rgba(255,45,45,0.3)" : "none",
+        }}
       >
         {display}
       </div>

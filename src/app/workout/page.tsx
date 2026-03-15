@@ -24,21 +24,50 @@ function StartWorkoutScreen({
   const workoutTypes = useQuery(api.workoutTypes.list);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-black px-6">
+    <div
+      className="flex min-h-[100dvh] flex-col items-center justify-center px-6"
+      style={{ background: "var(--color-obsidian)" }}
+    >
+      {/* Decorative glow */}
+      <div
+        className="fixed top-[-100px] right-[-100px] w-[300px] h-[300px] rounded-full pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, rgba(255,45,45,0.08) 0%, transparent 70%)",
+          animation: "pulse-glow 4s ease-in-out infinite",
+        }}
+      />
+
+      <div
+        className="text-[9px] uppercase tracking-[0.25em] mb-4"
+        style={{ fontFamily: "var(--font-mono)", color: "#ff2d2d" }}
+      >
+        Zenith
+      </div>
       <h1
-        className="mb-8 text-2xl font-bold tracking-tight text-white"
+        className="mb-10 text-2xl font-bold tracking-tight text-white"
         style={{ fontFamily: "var(--font-display)" }}
       >
         Start a Workout
       </h1>
 
       {workoutTypes === undefined ? (
-        <p className="text-sm text-zinc-500">Loading workout types…</p>
+        <p
+          className="text-sm"
+          style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.3)" }}
+        >
+          Loading…
+        </p>
       ) : workoutTypes.length === 0 ? (
         <button
           type="button"
           onClick={() => onStart({ type: "General" })}
-          className="w-full max-w-xs rounded-2xl bg-white px-6 py-4 text-center text-sm font-semibold text-black transition-transform active:scale-95"
+          className="w-full max-w-xs rounded-xl px-6 py-4 text-center text-sm font-semibold transition-all active:scale-95"
+          style={{
+            background: "rgba(255,45,45,0.15)",
+            border: "1px solid rgba(255,45,45,0.3)",
+            color: "#ff2d2d",
+            fontFamily: "var(--font-display)",
+          }}
         >
           General Workout
         </button>
@@ -49,7 +78,13 @@ function StartWorkoutScreen({
               type="button"
               key={wt._id}
               onClick={() => onStart({ workoutTypeId: wt._id, type: wt.name })}
-              className="w-full rounded-2xl bg-zinc-900 px-6 py-4 text-center text-sm font-semibold text-white border border-zinc-800 transition-transform active:scale-95"
+              className="w-full rounded-xl px-6 py-4 text-center text-sm font-semibold text-white transition-all active:scale-[0.97]"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                backdropFilter: "blur(16px)",
+                fontFamily: "var(--font-display)",
+              }}
             >
               {wt.name}
             </button>
@@ -59,7 +94,8 @@ function StartWorkoutScreen({
 
       <a
         href="/dashboard"
-        className="mt-10 text-sm text-zinc-500 underline underline-offset-4 hover:text-zinc-300 transition-colors"
+        className="mt-10 text-sm underline underline-offset-4 transition-colors hover:text-white/60"
+        style={{ color: "rgba(255,255,255,0.3)", fontFamily: "var(--font-mono)" }}
       >
         Back to Dashboard
       </a>
@@ -105,7 +141,10 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
 
   return (
     <WorkoutProvider sessionId={sessionId}>
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-black">
+      <div
+        className="flex h-[100dvh] flex-col overflow-hidden"
+        style={{ background: "var(--color-obsidian)" }}
+      >
         {/* Top bar: Exit + Finish */}
         <div
           className="flex shrink-0 items-center justify-between px-4 py-3"
@@ -114,20 +153,36 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
           <button
             type="button"
             onClick={() => void handleExit()}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-white"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              fontFamily: "var(--font-mono)",
+              color: "rgba(255,255,255,0.4)",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
             }}
           >
             Exit
           </button>
 
+          {/* Live indicator */}
+          <div className="flex items-center gap-2">
+            <div
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ background: "#ff2d2d", boxShadow: "0 0 8px rgba(255,45,45,0.6)" }}
+            />
+            <span
+              className="text-[9px] uppercase tracking-[0.15em]"
+              style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.35)" }}
+            >
+              Live
+            </span>
+          </div>
+
           <button
             type="button"
             onClick={() => void handleFinish()}
             disabled={isFinishing}
-            className="rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+            className="rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
             style={{
               background: "rgba(255,45,45,0.12)",
               border: "1px solid rgba(255,45,45,0.3)",
@@ -135,7 +190,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
               fontFamily: "var(--font-display)",
             }}
           >
-            {isFinishing ? "Finishing…" : "Finish Workout"}
+            {isFinishing ? "Finishing…" : "Finish"}
           </button>
         </div>
 
@@ -172,7 +227,12 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
 function TabFallback() {
   return (
     <div className="flex h-full items-center justify-center">
-      <p className="text-sm text-zinc-600">Loading…</p>
+      <p
+        className="text-sm"
+        style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.25)" }}
+      >
+        Loading…
+      </p>
     </div>
   );
 }
@@ -202,8 +262,16 @@ export default function WorkoutPage() {
   // Still loading from Convex
   if (activeSession === undefined) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-black">
-        <p className="text-sm text-zinc-500">Loading…</p>
+      <div
+        className="flex min-h-[100dvh] items-center justify-center"
+        style={{ background: "var(--color-obsidian)" }}
+      >
+        <p
+          className="text-sm"
+          style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.25)" }}
+        >
+          Loading…
+        </p>
       </div>
     );
   }

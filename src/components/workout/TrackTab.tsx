@@ -61,19 +61,28 @@ export default function TrackTab() {
   }, [suggestion]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-black pb-20">
-      {/* Header */}
-      <div className="flex justify-between items-center px-4 pt-4 pb-2">
-        <span className="text-sm text-zinc-500">
+    <div className="flex flex-col min-h-screen pb-20" style={{ background: "var(--color-obsidian)" }}>
+      {/* Header metrics bar */}
+      <div
+        className="flex justify-between items-center px-5 pt-4 pb-3"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <span
+          className="text-[10px] uppercase tracking-[0.15em]"
+          style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.35)" }}
+        >
           {session?.type ?? "Workout"}
         </span>
-        <span className="text-sm text-zinc-500">
+        <span
+          className="text-[10px] uppercase tracking-[0.15em]"
+          style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.35)" }}
+        >
           {metrics ? `${metrics.totalSets} sets · ${formatNum(metrics.totalVolume)} lbs` : ""}
         </span>
       </div>
 
-      {/* Rest timer or elapsed timer */}
-      <div className="py-6">
+      {/* Timer */}
+      <div className="py-8">
         {isResting ? (
           <WorkoutTimer mode="rest" />
         ) : (

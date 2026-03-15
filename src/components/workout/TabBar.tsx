@@ -34,23 +34,37 @@ export function useTabSwipe(
 
 export default function TabBar({ activeTab, onTabChange }: TabBarProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-800 z-10">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-10"
+      style={{
+        background: "rgba(12,12,12,0.9)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
       <div className="flex justify-center gap-12 py-3 pb-safe">
         <button
           type="button"
           onClick={() => onTabChange("track")}
-          className={`text-sm font-semibold transition-colors ${
-            activeTab === "track" ? "text-white" : "text-zinc-600"
-          }`}
+          className="text-sm font-semibold transition-colors"
+          style={{
+            fontFamily: "var(--font-display)",
+            color: activeTab === "track" ? "#ff2d2d" : "rgba(255,255,255,0.3)",
+            textShadow: activeTab === "track" ? "0 0 20px rgba(255,45,45,0.4)" : "none",
+          }}
         >
           Track
         </button>
         <button
           type="button"
           onClick={() => onTabChange("chat")}
-          className={`text-sm font-semibold transition-colors ${
-            activeTab === "chat" ? "text-white" : "text-zinc-600"
-          }`}
+          className="text-sm font-semibold transition-colors"
+          style={{
+            fontFamily: "var(--font-display)",
+            color: activeTab === "chat" ? "#ff2d2d" : "rgba(255,255,255,0.3)",
+            textShadow: activeTab === "chat" ? "0 0 20px rgba(255,45,45,0.4)" : "none",
+          }}
         >
           Chat
         </button>

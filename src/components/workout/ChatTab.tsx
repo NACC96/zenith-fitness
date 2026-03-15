@@ -74,20 +74,33 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
   ] as const;
 
   return (
-    <div className="flex flex-col h-full pb-12 bg-black">
+    <div className="flex flex-col h-full pb-12" style={{ background: "var(--color-obsidian)" }}>
       {/* Header — model picker */}
-      <div className="flex-none px-4 pt-3 pb-2 border-b border-zinc-800">
-        <div className="flex justify-center gap-2">
+      <div
+        className="flex-none px-4 pt-3 pb-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <div className="flex justify-center gap-1.5">
           {MODELS.map((m) => (
             <button
               key={m.id}
               type="button"
               onClick={() => setSelectedModel(m.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                selectedModel === m.id
-                  ? "bg-zinc-700 text-white"
-                  : "text-zinc-500 active:bg-zinc-800"
-              }`}
+              className="px-3 py-1 rounded-full text-[11px] font-medium transition-all"
+              style={{
+                fontFamily: "var(--font-mono)",
+                ...(selectedModel === m.id
+                  ? {
+                      background: "rgba(255,45,45,0.15)",
+                      border: "1px solid rgba(255,45,45,0.3)",
+                      color: "#ff2d2d",
+                    }
+                  : {
+                      background: "transparent",
+                      border: "1px solid transparent",
+                      color: "rgba(255,255,255,0.3)",
+                    }),
+              }}
             >
               {m.label}
             </button>
@@ -98,7 +111,10 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
       {/* Message list */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && !isStreaming && (
-          <p className="text-zinc-600 text-sm text-center mt-8">
+          <p
+            className="text-sm text-center mt-8"
+            style={{ color: "rgba(255,255,255,0.25)", fontFamily: "var(--font-display)" }}
+          >
             Ask me anything about your workout.
           </p>
         )}
@@ -109,11 +125,20 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+              className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm"
+              style={
                 msg.role === "user"
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-800 text-zinc-100"
-              }`}
+                  ? {
+                      background: "rgba(255,45,45,0.15)",
+                      border: "1px solid rgba(255,45,45,0.2)",
+                      color: "rgba(255,255,255,0.9)",
+                    }
+                  : {
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                      color: "rgba(255,255,255,0.8)",
+                    }
+              }
             >
               <p className="whitespace-pre-wrap break-words">{msg.content}</p>
             </div>
@@ -123,16 +148,32 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
         {/* Streaming bubble */}
         {isStreaming && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-2xl px-4 py-2 text-sm bg-zinc-800 text-zinc-100">
+            <div
+              className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                color: "rgba(255,255,255,0.8)",
+              }}
+            >
               {streamingContent ? (
                 <p className="whitespace-pre-wrap break-words">
                   {streamingContent}
                 </p>
               ) : (
-                <span className="inline-flex gap-1 items-center">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce [animation-delay:300ms]" />
+                <span className="inline-flex gap-1.5 items-center py-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:0ms]"
+                    style={{ background: "#ff2d2d" }}
+                  />
+                  <span
+                    className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:150ms]"
+                    style={{ background: "#ff2d2d", opacity: 0.7 }}
+                  />
+                  <span
+                    className="w-1.5 h-1.5 rounded-full animate-bounce [animation-delay:300ms]"
+                    style={{ background: "#ff2d2d", opacity: 0.4 }}
+                  />
                 </span>
               )}
             </div>
@@ -142,8 +183,16 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input bar — safe-area padding for notched phones */}
-      <div className="flex-none border-t border-zinc-800 px-3 py-2 pb-[env(safe-area-inset-bottom,8px)] bg-black">
+      {/* Input bar */}
+      <div
+        className="flex-none px-3 py-2 pb-[env(safe-area-inset-bottom,8px)]"
+        style={{
+          background: "rgba(12,12,12,0.9)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
@@ -153,20 +202,28 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
             placeholder="Message…"
             rows={1}
             disabled={isStreaming}
-            className="flex-1 resize-none overflow-hidden rounded-2xl bg-zinc-800 px-4 py-2 text-base text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600 disabled:opacity-50 max-h-32"
+            className="flex-1 resize-none overflow-hidden rounded-xl px-4 py-2.5 text-base text-white placeholder-white/25 focus:outline-none disabled:opacity-50 max-h-32"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
           />
           <button
             type="button"
             onClick={() => void handleSend()}
             disabled={!inputValue.trim() || isStreaming}
-            className="flex-none w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            className="flex-none w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-90"
+            style={{
+              background: "rgba(255,45,45,0.2)",
+              border: "1px solid rgba(255,45,45,0.3)",
+            }}
             aria-label="Send message"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4 text-white"
+              fill="#ff2d2d"
+              className="w-4 h-4"
               aria-hidden="true"
             >
               <title>Send</title>
