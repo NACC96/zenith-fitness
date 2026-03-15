@@ -113,6 +113,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
 
   const [activeTab, setActiveTab] = useState<"track" | "chat">("track");
   const [isFinishing, setIsFinishing] = useState(false);
+  const [showExitMenu, setShowExitMenu] = useState(false);
   const swipeHandlers = useTabSwipe(activeTab, setActiveTab);
 
   const handleFinish = useCallback(async () => {
@@ -128,14 +129,16 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
     }
   }, [finishActive, isFinishing, router, sessionId]);
 
-  const handleExit = useCallback(async () => {
-    if (!confirm("Exit and delete this workout session?")) return;
+  const handleSaveExit = useCallback(() => {
+    router.push("/dashboard");
+  }, [router]);
+
+  const handleDiscard = useCallback(async () => {
     try {
       await removeSession({ sessionId });
       router.push("/dashboard");
     } catch (err) {
       console.error("Failed to delete session:", err);
-      return;
     }
   }, [removeSession, router, sessionId]);
 
@@ -150,19 +153,63 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
           className="flex shrink-0 items-center justify-between px-4 py-3"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
-          <button
-            type="button"
-            onClick={() => void handleExit()}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-            style={{
-              fontFamily: "var(--font-mono)",
-              color: "rgba(255,255,255,0.4)",
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.06)",
-            }}
-          >
-            Exit
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowExitMenu((v) => !v)}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                fontFamily: "var(--font-mono)",
+                color: "rgba(255,255,255,0.4)",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+            >
+              Exit
+            </button>
+
+            {showExitMenu && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-[70] cursor-default"
+                  onClick={() => setShowExitMenu(false)}
+                  aria-label="Close menu"
+                />
+                <div
+                  className="absolute left-0 top-full mt-2 z-[71] rounded-xl overflow-hidden min-w-[180px]"
+                  style={{
+                    background: "rgba(20,20,20,0.98)",
+                    backdropFilter: "blur(24px)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleSaveExit}
+                    className="w-full text-left px-4 py-3 text-sm transition-colors active:bg-white/5"
+                    style={{ fontFamily: "var(--font-display)", color: "rgba(255,255,255,0.8)" }}
+                  >
+                    Save & Exit
+                  </button>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Discard this workout and all logged sets?")) {
+                        void handleDiscard();
+                      }
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm transition-colors active:bg-white/5"
+                    style={{ fontFamily: "var(--font-display)", color: "#ff2d2d" }}
+                  >
+                    Discard Workout
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Live indicator */}
           <div className="flex items-center gap-2">

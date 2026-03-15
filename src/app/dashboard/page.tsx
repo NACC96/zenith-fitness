@@ -36,7 +36,15 @@ export default function DashboardPage() {
 
   const rawWorkouts = useQuery(api.workoutSessions.listAll);
   const workoutTypes = useQuery(api.workoutTypes.list);
-  const allWorkouts = useMemo(() => (rawWorkouts ?? []) as WorkoutSession[], [rawWorkouts]);
+  const allWorkoutsUnfiltered = useMemo(() => (rawWorkouts ?? []) as WorkoutSession[], [rawWorkouts]);
+  const activeWorkout = useMemo(
+    () => allWorkoutsUnfiltered.find((w) => w.status === "active") ?? null,
+    [allWorkoutsUnfiltered]
+  );
+  const allWorkouts = useMemo(
+    () => allWorkoutsUnfiltered.filter((w) => w.status !== "active"),
+    [allWorkoutsUnfiltered]
+  );
 
   // Workout session deletion
   const deleteWorkoutSession = useMutation(api.workoutSessions.remove);
@@ -353,6 +361,56 @@ export default function DashboardPage() {
             Start Workout
           </motion.button>
         </div>
+
+        {/* Active workout resume banner */}
+        {activeWorkout && (
+          <motion.button
+            type="button"
+            onClick={() => router.push("/workout")}
+            className="w-full rounded-xl p-4 mb-6 flex items-center justify-between cursor-pointer transition-all active:scale-[0.98]"
+            style={{
+              background: "rgba(255,45,45,0.08)",
+              border: "1px solid rgba(255,45,45,0.25)",
+              boxShadow: "0 0 30px rgba(255,45,45,0.08)",
+            }}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-2 h-2 rounded-full animate-pulse"
+                style={{ background: "#ff2d2d", boxShadow: "0 0 8px rgba(255,45,45,0.6)" }}
+              />
+              <div className="text-left">
+                <div
+                  className="text-sm font-semibold text-white"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {activeWorkout.type} — In Progress
+                </div>
+                <div
+                  className="text-[10px] mt-0.5 uppercase tracking-wider"
+                  style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.35)" }}
+                >
+                  {activeWorkout.exercises.length} exercise{activeWorkout.exercises.length !== 1 ? "s" : ""} ·{" "}
+                  {activeWorkout.exercises.reduce((s, e) => s + e.sets.length, 0)} sets logged
+                </div>
+              </div>
+            </div>
+            <div
+              className="text-sm font-semibold px-4 py-2 rounded-lg"
+              style={{
+                fontFamily: "var(--font-display)",
+                color: "#ff2d2d",
+                background: "rgba(255,45,45,0.12)",
+                border: "1px solid rgba(255,45,45,0.3)",
+              }}
+            >
+              Resume
+            </div>
+          </motion.button>
+        )}
 
         {/* Stats row */}
         <StatsRow workouts={allWorkouts} activeFilter={activeFilter} />

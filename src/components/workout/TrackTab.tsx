@@ -100,7 +100,9 @@ export default function TrackTab() {
 
       {/* Timer */}
       <div className="py-8">
-        {isResting ? (
+        {activeSet ? (
+          <WorkoutTimer mode="set" />
+        ) : isResting ? (
           <WorkoutTimer mode="rest" />
         ) : (
           <WorkoutTimer mode="elapsed" />
