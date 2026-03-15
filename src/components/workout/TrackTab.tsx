@@ -61,7 +61,7 @@ export default function TrackTab() {
   }, [suggestion]);
 
   return (
-    <div className="flex flex-col min-h-screen pb-20" style={{ background: "var(--color-obsidian)" }}>
+    <div className="flex flex-col min-h-screen pb-24" style={{ background: "var(--color-obsidian)" }}>
       {/* Header metrics bar */}
       <div
         className="flex justify-between items-center px-5 pt-4 pb-3"

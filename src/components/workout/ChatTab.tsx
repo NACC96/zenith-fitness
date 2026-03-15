@@ -74,7 +74,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
   ] as const;
 
   return (
-    <div className="flex flex-col h-full pb-12" style={{ background: "var(--color-obsidian)" }}>
+    <div className="flex flex-col h-full pb-14" style={{ background: "var(--color-obsidian)" }}>
       {/* Header — model picker */}
       <div
         className="flex-none px-4 pt-3 pb-2"
