@@ -39,6 +39,7 @@ interface ChatDrawerProps {
 
 const MODELS = [
   { label: "Gemini 3.1 Pro", value: "google/gemini-3.1-pro-preview" },
+  { label: "Gemini 3.1 Pro CT", value: "google/gemini-3.1-pro-preview-customtools" },
   { label: "Claude Sonnet 4.6", value: "anthropic/claude-sonnet-4.6" },
   { label: "MiniMax M2.5", value: "minimax/minimax-m2.5" },
   { label: "GLM-5", value: "z-ai/glm-5" },
