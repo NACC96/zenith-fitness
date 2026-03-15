@@ -263,6 +263,21 @@ export const getLiveTimingState = query({
   },
 });
 
+// Pause: cancel the active set and start rest timer
+export const pauseSet = mutation({
+  args: { sessionId: v.id("workoutSessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) throw new Error("Session not found");
+
+    const now = Date.now();
+    await ctx.db.patch(args.sessionId, {
+      activeSet: undefined,
+      activeRestStartedAt: now,
+    });
+  },
+});
+
 // Finish an active workout session
 export const finishActive = mutation({
   args: { sessionId: v.id("workoutSessions") },

@@ -18,11 +18,16 @@ export default function ExerciseHero({
   lastReps,
   setNumber,
 }: ExerciseHeroProps) {
-  const { completeSet, sessionId } = useWorkout();
+  const { completeSet, pauseSet, sessionId } = useWorkout();
 
   const [weight, setWeight] = useState(lastWeight ?? 135);
   const [reps, setReps] = useState(lastReps ?? 8);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const handlePause = useCallback(async () => {
+    if (!sessionId) return;
+    await pauseSet({ sessionId });
+  }, [sessionId, pauseSet]);
 
   // Sync defaults when exercise changes
   useEffect(() => {
@@ -159,24 +164,42 @@ export default function ExerciseHero({
         </div>
       </div>
 
-      {/* Log button — red accent */}
-      <button
-        type="button"
-        onClick={() => setShowConfirm(true)}
-        className="w-full rounded-xl py-4 text-center transition-all active:scale-[0.97]"
-        style={{
-          background: "rgba(255,45,45,0.15)",
-          border: "1px solid rgba(255,45,45,0.3)",
-          boxShadow: "0 0 30px rgba(255,45,45,0.1)",
-        }}
-      >
-        <div
-          className="font-bold text-lg"
-          style={{ fontFamily: "var(--font-display)", color: "#ff2d2d" }}
+      {/* Action buttons */}
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={handlePause}
+          className="flex-1 rounded-xl py-4 text-center transition-all active:scale-[0.97]"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
         >
-          Log {weight} × {reps}
-        </div>
-      </button>
+          <div
+            className="font-bold text-lg"
+            style={{ fontFamily: "var(--font-display)", color: "rgba(255,255,255,0.5)" }}
+          >
+            Rest
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowConfirm(true)}
+          className="flex-[2] rounded-xl py-4 text-center transition-all active:scale-[0.97]"
+          style={{
+            background: "rgba(255,45,45,0.15)",
+            border: "1px solid rgba(255,45,45,0.3)",
+            boxShadow: "0 0 30px rgba(255,45,45,0.1)",
+          }}
+        >
+          <div
+            className="font-bold text-lg"
+            style={{ fontFamily: "var(--font-display)", color: "#ff2d2d" }}
+          >
+            Log {weight} × {reps}
+          </div>
+        </button>
+      </div>
 
       <ConfirmSetModal
         isOpen={showConfirm}

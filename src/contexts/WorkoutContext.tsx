@@ -19,6 +19,7 @@ interface WorkoutContextValue {
   // Mutations
   completeSet: ReturnType<typeof useMutation<typeof api.exercises.completeSet>>;
   startSet: ReturnType<typeof useMutation<typeof api.exercises.startSet>>;
+  pauseSet: ReturnType<typeof useMutation<typeof api.workoutSessions.pauseSet>>;
   finishWorkout: ReturnType<typeof useMutation<typeof api.workoutSessions.finishActive>>;
 }
 
@@ -49,6 +50,7 @@ export function WorkoutProvider({
 
   const completeSet = useMutation(api.exercises.completeSet);
   const startSet = useMutation(api.exercises.startSet);
+  const pauseSet = useMutation(api.workoutSessions.pauseSet);
   const finishWorkout = useMutation(api.workoutSessions.finishActive);
 
   return (
@@ -60,6 +62,7 @@ export function WorkoutProvider({
         timingState,
         completeSet,
         startSet,
+        pauseSet,
         finishWorkout,
       }}
     >
