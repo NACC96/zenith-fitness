@@ -8,7 +8,7 @@ const init = internalMutation(async (ctx) => {
   }
 
   // Seed workout types
-  const types = ["Chest", "Back", "Legs", "Shoulders", "Arms"];
+  const types = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Full Body"];
   for (const name of types) {
     await ctx.db.insert("workoutTypes", { name });
   }
