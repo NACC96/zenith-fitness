@@ -63,4 +63,14 @@ export default defineSchema({
     key: v.string(),
     value: v.string(),
   }).index("by_key", ["key"]),
+
+  auditLog: defineTable({
+    action: v.string(),
+    table: v.string(),
+    documentId: v.string(),
+    snapshot: v.any(),
+    metadata: v.optional(v.any()),
+    timestamp: v.number(),
+  }).index("by_timestamp", ["timestamp"])
+    .index("by_table", ["table", "timestamp"]),
 });

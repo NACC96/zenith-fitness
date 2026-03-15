@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { writeAuditLog } from "./auditLog";
 
 type TimedSetLike = {
   startedAt?: number;
@@ -326,10 +327,27 @@ export const finishActive = mutation({
 export const remove = mutation({
   args: { sessionId: v.id("workoutSessions") },
   handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
     const exercises = await ctx.db
       .query("exercises")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .collect();
+
+    // Audit log the full session + exercises before deletion
+    await writeAuditLog(ctx, {
+      action: "delete_session",
+      table: "workoutSessions",
+      documentId: args.sessionId,
+      snapshot: {
+        ...session,
+        exercises: exercises.map((ex) => ({
+          _id: ex._id,
+          name: ex.name,
+          sets: ex.sets,
+        })),
+      },
+    });
+
     for (const ex of exercises) {
       await ctx.db.delete(ex._id);
     }

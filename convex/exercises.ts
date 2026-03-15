@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { writeAuditLog } from "./auditLog";
 
 const timedSetValidator = v.object({
   weight: v.number(),
@@ -345,6 +346,16 @@ export const update = mutation({
     sets: v.array(timedSetValidator),
   },
   handler: async (ctx, args) => {
+    const before = await ctx.db.get(args.exerciseId);
+    if (before) {
+      await writeAuditLog(ctx, {
+        action: "update_sets",
+        table: "exercises",
+        documentId: args.exerciseId,
+        snapshot: { name: before.name, sets: before.sets },
+        metadata: { newSets: args.sets },
+      });
+    }
     await ctx.db.patch(args.exerciseId, { sets: args.sets });
   },
 });
@@ -352,6 +363,15 @@ export const update = mutation({
 export const remove = mutation({
   args: { exerciseId: v.id("exercises") },
   handler: async (ctx, args) => {
+    const before = await ctx.db.get(args.exerciseId);
+    if (before) {
+      await writeAuditLog(ctx, {
+        action: "delete_exercise",
+        table: "exercises",
+        documentId: args.exerciseId,
+        snapshot: { name: before.name, sessionId: before.sessionId, sets: before.sets },
+      });
+    }
     await ctx.db.delete(args.exerciseId);
   },
 });
@@ -370,6 +390,15 @@ export const removeSet = mutation({
         `Invalid set index ${args.setIndex}. Exercise has ${exercise.sets.length} sets.`
       );
     }
+
+    const removedSet = exercise.sets[args.setIndex];
+    await writeAuditLog(ctx, {
+      action: exercise.sets.length === 1 ? "delete_exercise" : "remove_set",
+      table: "exercises",
+      documentId: args.exerciseId,
+      snapshot: { name: exercise.name, sessionId: exercise.sessionId, sets: exercise.sets },
+      metadata: { setIndex: args.setIndex, removedSet },
+    });
 
     if (exercise.sets.length === 1) {
       await ctx.db.delete(args.exerciseId);

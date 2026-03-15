@@ -9,6 +9,7 @@
  */
 
 import type * as ai from "../ai.js";
+import type * as auditLog from "../auditLog.js";
 import type * as chatMessages from "../chatMessages.js";
 import type * as chatSessions from "../chatSessions.js";
 import type * as exerciseSuggestions from "../exerciseSuggestions.js";
@@ -28,6 +29,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
+  auditLog: typeof auditLog;
   chatMessages: typeof chatMessages;
   chatSessions: typeof chatSessions;
   exerciseSuggestions: typeof exerciseSuggestions;

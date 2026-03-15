@@ -43,6 +43,9 @@ const MODELS = [
   { label: "Claude Sonnet 4.6", value: "anthropic/claude-sonnet-4.6" },
   { label: "MiniMax M2.5", value: "minimax/minimax-m2.5" },
   { label: "GLM-5", value: "z-ai/glm-5" },
+  { label: "GLM-5 Turbo", value: "z-ai/glm-5-turbo" },
+  { label: "Grok 4.20", value: "x-ai/grok-4.20-beta" },
+  { label: "Grok 4.20 MA", value: "x-ai/grok-4.20-multi-agent-beta" },
   { label: "Kimi K2.5", value: "moonshotai/kimi-k2.5" },
   { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
 ];
