@@ -22,18 +22,25 @@ export default function TrackTab() {
     sessionId ? { sessionId } : "skip"
   );
 
-  const suggestion = useQuery(
-    api.exerciseSuggestions.suggestNext,
-    sessionId && !activeSet ? { sessionId } : "skip"
+  // Only suggest a new exercise after 4+ sets on the last one
+  const lastExerciseDone = useMemo(() => {
+    if (!exercises || exercises.length === 0) return true;
+    const last = exercises[exercises.length - 1];
+    return last.sets.length >= 4;
+  }, [exercises]);
+
+  const shouldSuggest = sessionId && !activeSet && lastExerciseDone;
+
+  const allSuggestions = useQuery(
+    api.exerciseSuggestions.suggestAll,
+    shouldSuggest ? { sessionId } : "skip"
   );
 
-  const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null);
-  const activeSuggestion = suggestion && suggestion !== dismissedSuggestion ? suggestion : null;
+  const [showAll, setShowAll] = useState(false);
 
   // Determine current exercise context
   const currentExercise = useMemo(() => {
     if (activeSet) {
-      // Find last set info for this exercise
       const ex = exercises?.find(
         (e) => e.name.toLowerCase() === activeSet.exerciseName.toLowerCase()
       );
@@ -51,14 +58,15 @@ export default function TrackTab() {
   const handleAcceptSuggestion = useCallback(
     async (exerciseName: string) => {
       if (!sessionId) return;
+      setShowAll(false);
       await startSet({ sessionId, exerciseName });
     },
     [sessionId, startSet]
   );
 
-  const handleDismissSuggestion = useCallback(() => {
-    if (suggestion) setDismissedSuggestion(suggestion);
-  }, [suggestion]);
+  const handleSkipTop = useCallback(() => {
+    setShowAll(true);
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen pb-24" style={{ background: "var(--color-obsidian)" }}>
@@ -100,9 +108,11 @@ export default function TrackTab() {
         />
       ) : (
         <ExerciseSuggestion
-          suggestion={activeSuggestion ?? null}
+          topSuggestion={allSuggestions?.[0] ?? null}
+          allSuggestions={allSuggestions ?? []}
+          showAll={showAll}
           onAccept={handleAcceptSuggestion}
-          onDismiss={handleDismissSuggestion}
+          onSkip={handleSkipTop}
         />
       )}
 

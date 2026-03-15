@@ -77,3 +77,66 @@ export const suggestNext = query({
     return candidates[0][0];
   },
 });
+
+export const suggestAll = query({
+  args: {
+    sessionId: v.id("workoutSessions"),
+  },
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return [];
+
+    const currentExercises = await ctx.db
+      .query("exercises")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+    const doneNames = new Set(
+      currentExercises.map((e) => e.name.toLowerCase())
+    );
+
+    const recentSessions = await ctx.db
+      .query("workoutSessions")
+      .withIndex("by_type", (q) => q.eq("type", session.type))
+      .order("desc")
+      .take(10);
+
+    const exerciseOrder: Map<string, { count: number; avgPosition: number; originalName: string }> =
+      new Map();
+
+    for (const pastSession of recentSessions) {
+      if (pastSession._id === sessionId) continue;
+
+      const pastExercises = await ctx.db
+        .query("exercises")
+        .withIndex("by_session", (q) =>
+          q.eq("sessionId", pastSession._id)
+        )
+        .collect();
+
+      pastExercises.forEach((ex, index) => {
+        const name = ex.name.toLowerCase();
+        const existing = exerciseOrder.get(name) ?? {
+          count: 0,
+          avgPosition: 0,
+          originalName: ex.name,
+        };
+        existing.avgPosition =
+          (existing.avgPosition * existing.count + index) /
+          (existing.count + 1);
+        existing.count++;
+        existing.originalName = ex.name;
+        exerciseOrder.set(name, existing);
+      });
+    }
+
+    const currentPosition = currentExercises.length;
+    return [...exerciseOrder.entries()]
+      .filter(([name]) => !doneNames.has(name))
+      .sort(
+        (a, b) =>
+          Math.abs(a[1].avgPosition - currentPosition) -
+          Math.abs(b[1].avgPosition - currentPosition)
+      )
+      .map(([, data]) => data.originalName);
+  },
+});
