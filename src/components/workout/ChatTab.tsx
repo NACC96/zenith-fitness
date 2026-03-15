@@ -74,7 +74,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
   ] as const;
 
   return (
-    <div className="flex flex-col h-full pb-14" style={{ background: "var(--color-obsidian)" }}>
+    <div className="flex flex-col h-full pb-[4.5rem]" style={{ background: "var(--color-obsidian)" }}>
       {/* Header — model picker */}
       <div
         className="flex-none px-4 pt-3 pb-2"
@@ -185,7 +185,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
 
       {/* Input bar */}
       <div
-        className="flex-none px-3 py-2 pb-[env(safe-area-inset-bottom,8px)]"
+        className="flex-none px-3 py-3"
         style={{
           background: "rgba(12,12,12,0.9)",
           backdropFilter: "blur(20px)",
@@ -202,7 +202,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
             placeholder="Message…"
             rows={1}
             disabled={isStreaming}
-            className="flex-1 resize-none overflow-hidden rounded-xl px-4 py-2.5 text-base text-white placeholder-white/25 focus:outline-none disabled:opacity-50 max-h-32"
+            className="flex-1 resize-none overflow-hidden rounded-xl px-4 py-3 text-base text-white placeholder-white/25 focus:outline-none disabled:opacity-50 max-h-32 min-h-[44px]"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.08)",
@@ -212,7 +212,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
             type="button"
             onClick={() => void handleSend()}
             disabled={!inputValue.trim() || isStreaming}
-            className="flex-none w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-90"
+            className="flex-none w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-90"
             style={{
               background: "rgba(255,45,45,0.2)",
               border: "1px solid rgba(255,45,45,0.3)",
