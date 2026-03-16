@@ -18,6 +18,7 @@ import ChatDrawer from "@/components/ChatDrawer";
 import ChatToggleButton from "@/components/ChatToggleButton";
 import Portal from "@/components/Portal";
 import SectionLabel from "@/components/SectionLabel";
+import CollapsibleSection from "@/components/CollapsibleSection";
 import WeekOverWeek from "@/components/WeekOverWeek";
 import TrainingStreak from "@/components/TrainingStreak";
 import PeriodComparison from "@/components/PeriodComparison";
@@ -28,6 +29,7 @@ import RestTimeAnalytics from "@/components/RestTimeAnalytics";
 import FatigueCurve from "@/components/FatigueCurve";
 import FrequencyHeatmap from "@/components/FrequencyHeatmap";
 import PersonalRecords from "@/components/PersonalRecords";
+import { useSectionPreviews } from "@/hooks/useSectionPreviews";
 
 export default function DashboardPage() {
   const STREAM_UI_FLUSH_MS = 50;
@@ -101,6 +103,8 @@ export default function DashboardPage() {
         : allWorkouts.filter((w) => w.type === activeFilter),
     [allWorkouts, activeFilter],
   );
+
+  const previews = useSectionPreviews(allWorkouts, filteredSessions);
 
   // Sync saved model preference from Convex
   useEffect(() => {
@@ -423,59 +427,64 @@ export default function DashboardPage() {
           </motion.button>
         )}
 
-        {/* ── Overview ── */}
+        {/* ── Overview (always visible) ── */}
         <SectionLabel>Overview</SectionLabel>
         <StatsRow workouts={allWorkouts} activeFilter={activeFilter} />
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <WeekOverWeek workouts={allWorkouts} />
           <TrainingStreak workouts={allWorkouts} />
-          <PeriodComparison workouts={allWorkouts} />
         </div>
 
-        {/* ── Trends ── */}
-        <SectionLabel>Trends</SectionLabel>
-        <div className="flex flex-col gap-4 md:flex-row">
-          <VolumeTrendChart workouts={filteredSessions} />
-          <DurationTrendChart workouts={filteredSessions} />
-        </div>
-        <div className="mt-4">
-          <OneRepMaxChart workouts={filteredSessions} />
-        </div>
+        {/* ── Collapsible sections ── */}
+        <div className="mt-6 flex flex-col gap-0">
+          <CollapsibleSection title="Period Insights" preview={previews.periodInsights}>
+            <PeriodComparison workouts={allWorkouts} />
+            <div className="mt-4 flex flex-col gap-4 md:flex-row">
+              <VolumeTrendChart workouts={filteredSessions} />
+              <DurationTrendChart workouts={filteredSessions} />
+            </div>
+          </CollapsibleSection>
 
-        {/* ── Analysis ── */}
-        <SectionLabel>Analysis</SectionLabel>
-        <div className="flex flex-col gap-4 md:flex-row">
-          <ExerciseProgression workouts={filteredSessions} />
-          <MuscleGroupBalance workouts={filteredSessions} />
-        </div>
-        <div className="mt-4 flex flex-col gap-4 md:flex-row">
-          <RestTimeAnalytics workouts={filteredSessions} />
-          <FatigueCurve workouts={filteredSessions} />
-        </div>
+          <CollapsibleSection title="Strength" preview={previews.strength}>
+            <OneRepMaxChart workouts={filteredSessions} />
+            <div className="mt-4">
+              <ExerciseProgression workouts={filteredSessions} />
+            </div>
+          </CollapsibleSection>
 
-        {/* ── Activity ── */}
-        <SectionLabel>Activity</SectionLabel>
-        <div className="flex flex-col gap-4 md:flex-row">
-          <FrequencyHeatmap workouts={allWorkouts} />
-          <PersonalRecords workouts={allWorkouts} />
-        </div>
+          <CollapsibleSection title="Deep Analysis" preview={previews.deepAnalysis}>
+            <div className="flex flex-col gap-4 md:flex-row">
+              <MuscleGroupBalance workouts={filteredSessions} />
+              <RestTimeAnalytics workouts={filteredSessions} />
+            </div>
+            <div className="mt-4">
+              <FatigueCurve workouts={filteredSessions} />
+            </div>
+          </CollapsibleSection>
 
-        {/* ── Sessions ── */}
-        <SectionLabel>Sessions</SectionLabel>
-        <div>
-          <SessionList
-            workouts={filteredSessions}
-            onSelect={setSelectedSession}
-            onDelete={handleDeleteWorkout}
-            onAddType={() => setAddModalOpen(true)}
-          />
+          <CollapsibleSection title="Activity & Sessions" preview={previews.activityHistory}>
+            <div className="flex flex-col gap-4 md:flex-row">
+              <FrequencyHeatmap workouts={allWorkouts} />
+              <PersonalRecords workouts={allWorkouts} />
+            </div>
+            <div className="mt-4">
+              <SessionList
+                workouts={filteredSessions}
+                onSelect={setSelectedSession}
+                onDelete={handleDeleteWorkout}
+                onAddType={() => setAddModalOpen(true)}
+              />
+            </div>
+          </CollapsibleSection>
         </div>
       </main>
 
-      <AddTypeModal
-        isOpen={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
-      />
+      <Portal>
+        <AddTypeModal
+          isOpen={addModalOpen}
+          onClose={() => setAddModalOpen(false)}
+        />
+      </Portal>
 
       <SessionDetailModal
         isOpen={selectedSession !== null}
