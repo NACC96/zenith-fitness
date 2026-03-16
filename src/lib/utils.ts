@@ -40,3 +40,33 @@ export function formatDuration(ms: number): string {
   const seconds = Math.floor((safeMs % 60000) / 1000);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
+
+/** Rest duration in ms for a set, or null if timing data is missing */
+export function getRestDurationMs(set: WorkoutSet): number | null {
+  if (set.restStartedAt == null || set.restEndedAt == null) return null;
+  return Math.max(0, set.restEndedAt - set.restStartedAt);
+}
+
+/** Session duration in ms, or null if timing data is missing */
+export function getSessionDurationMs(w: WorkoutSession): number | null {
+  if (w.firstSetStartedAt == null || w.lastSetEndedAt == null) return null;
+  return Math.max(0, w.lastSetEndedAt - w.firstSetStartedAt);
+}
+
+const MUSCLE_KEYWORDS: [string, string[]][] = [
+  ["Legs", ["squat", "leg", "lunge", "calf", "hamstring", "quad", "glute", "rdl"]],
+  ["Back", ["row", "pull-up", "pullup", "lat", "deadlift", "back"]],
+  ["Chest", ["bench", "fly", "chest", "push-up", "pushup", "pec"]],
+  ["Shoulders", ["shoulder", "delt", "lateral raise", "ohp", "military"]],
+  ["Arms", ["curl", "tricep", "bicep", "arm", "hammer", "extension"]],
+  ["Core", ["plank", "crunch", "ab", "core", "sit-up"]],
+];
+
+/** Best-effort mapping of exercise name to muscle group */
+export function exerciseToMuscleGroup(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [group, keywords] of MUSCLE_KEYWORDS) {
+    if (keywords.some((k) => lower.includes(k))) return group;
+  }
+  return "Other";
+}

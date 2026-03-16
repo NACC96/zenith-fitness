@@ -17,6 +17,17 @@ import AddTypeModal from "@/components/AddTypeModal";
 import ChatDrawer from "@/components/ChatDrawer";
 import ChatToggleButton from "@/components/ChatToggleButton";
 import Portal from "@/components/Portal";
+import SectionLabel from "@/components/SectionLabel";
+import WeekOverWeek from "@/components/WeekOverWeek";
+import TrainingStreak from "@/components/TrainingStreak";
+import PeriodComparison from "@/components/PeriodComparison";
+import DurationTrendChart from "@/components/DurationTrendChart";
+import OneRepMaxChart from "@/components/OneRepMaxChart";
+import MuscleGroupBalance from "@/components/MuscleGroupBalance";
+import RestTimeAnalytics from "@/components/RestTimeAnalytics";
+import FatigueCurve from "@/components/FatigueCurve";
+import FrequencyHeatmap from "@/components/FrequencyHeatmap";
+import PersonalRecords from "@/components/PersonalRecords";
 
 export default function DashboardPage() {
   const STREAM_UI_FLUSH_MS = 50;
@@ -412,17 +423,46 @@ export default function DashboardPage() {
           </motion.button>
         )}
 
-        {/* Stats row */}
+        {/* ── Overview ── */}
+        <SectionLabel>Overview</SectionLabel>
         <StatsRow workouts={allWorkouts} activeFilter={activeFilter} />
-
-        {/* Charts row */}
-        <div className="mt-6 flex flex-col gap-4 md:flex-row">
-          <VolumeTrendChart workouts={filteredSessions} />
-          <ExerciseProgression workouts={filteredSessions} />
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <WeekOverWeek workouts={allWorkouts} />
+          <TrainingStreak workouts={allWorkouts} />
+          <PeriodComparison workouts={allWorkouts} />
         </div>
 
-        {/* Session list */}
-        <div className="mt-6">
+        {/* ── Trends ── */}
+        <SectionLabel>Trends</SectionLabel>
+        <div className="flex flex-col gap-4 md:flex-row">
+          <VolumeTrendChart workouts={filteredSessions} />
+          <DurationTrendChart workouts={filteredSessions} />
+        </div>
+        <div className="mt-4">
+          <OneRepMaxChart workouts={filteredSessions} />
+        </div>
+
+        {/* ── Analysis ── */}
+        <SectionLabel>Analysis</SectionLabel>
+        <div className="flex flex-col gap-4 md:flex-row">
+          <ExerciseProgression workouts={filteredSessions} />
+          <MuscleGroupBalance workouts={filteredSessions} />
+        </div>
+        <div className="mt-4 flex flex-col gap-4 md:flex-row">
+          <RestTimeAnalytics workouts={filteredSessions} />
+          <FatigueCurve workouts={filteredSessions} />
+        </div>
+
+        {/* ── Activity ── */}
+        <SectionLabel>Activity</SectionLabel>
+        <div className="flex flex-col gap-4 md:flex-row">
+          <FrequencyHeatmap workouts={allWorkouts} />
+          <PersonalRecords workouts={allWorkouts} />
+        </div>
+
+        {/* ── Sessions ── */}
+        <SectionLabel>Sessions</SectionLabel>
+        <div>
           <SessionList
             workouts={filteredSessions}
             onSelect={setSelectedSession}

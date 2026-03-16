@@ -10,12 +10,14 @@ interface CustomTooltipProps {
   active?: boolean;
   payload?: TooltipPayloadItem[];
   label?: string;
+  unit?: string;
 }
 
 export default function CustomTooltip({
   active,
   payload,
   label,
+  unit = "lb",
 }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
 
@@ -50,7 +52,7 @@ export default function CustomTooltip({
             margin: 0,
           }}
         >
-          {entry.value.toLocaleString("en-US")} lb
+          {entry.value.toLocaleString("en-US")} {unit}
         </p>
       ))}
     </div>
