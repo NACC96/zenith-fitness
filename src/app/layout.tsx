@@ -37,7 +37,7 @@ export default function RootLayout({
         {/* Decorative layers */}
         <div className="grid-pattern" />
         <div className="noise-overlay" />
-        <div className="glow-sphere glow-sphere--lime" />
+        <div className="glow-sphere glow-sphere--accent" />
         <div className="glow-sphere glow-sphere--emerald" />
 
         {/* Floating shell */}

@@ -120,7 +120,7 @@ const init = internalMutation(async (ctx) => {
     sets: [
       { weight: 85, reps: 12 },
       { weight: 95, reps: 12 },
-      { weight: 105, reps: 11.5 },
+      { weight: 105, reps: 11 },
       { weight: 115, reps: 6 },
     ],
   });

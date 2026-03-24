@@ -18,7 +18,7 @@ export default function Header({ types, activeFilter, onFilterChange }: HeaderPr
       <div className="flex items-center justify-between md:contents">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-lime">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent">
             <span className="text-lg font-semibold text-black">Z</span>
           </div>
           <span
@@ -32,8 +32,8 @@ export default function Header({ types, activeFilter, onFilterChange }: HeaderPr
         {/* Right: System Status — inline with logo on mobile */}
         <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-white/50">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lime opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-lime" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
           </span>
           Tracking Active
         </div>

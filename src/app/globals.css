@@ -5,8 +5,8 @@
   --color-obsidian: #0c0c0c;
   --color-obsidian-light: #141414;
   --color-obsidian-surface: #1a1a1a;
-  --color-lime: #ff2d2d;
-  --color-lime-dim: #cc2424;
+  --color-accent: #ff2d2d;
+  --color-accent-dim: #cc2424;
   --color-emerald: #10b981;
   --color-emerald-dim: #059669;
   --color-glass: rgba(255, 255, 255, 0.03);
@@ -105,7 +105,7 @@ body {
   z-index: 0;
 }
 
-.glow-sphere--lime {
+.glow-sphere--accent {
   width: 400px;
   height: 400px;
   background: radial-gradient(circle, rgba(255, 45, 45, 0.08) 0%, transparent 70%);

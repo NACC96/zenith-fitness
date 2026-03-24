@@ -7,6 +7,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { WorkoutProvider } from "@/contexts/WorkoutContext";
 import TabBar, { useTabSwipe } from "@/components/workout/TabBar";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export const dynamic = "force-dynamic";
 
@@ -114,11 +115,15 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
   const [activeTab, setActiveTab] = useState<"track" | "chat">("track");
   const [isFinishing, setIsFinishing] = useState(false);
   const [showExitMenu, setShowExitMenu] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ type: "finish" | "discard" } | null>(null);
   const swipeHandlers = useTabSwipe(activeTab, setActiveTab);
 
   const handleFinish = useCallback(async () => {
     if (isFinishing) return;
-    if (!confirm("Finish this workout?")) return;
+    setConfirmModal({ type: "finish" });
+  }, [isFinishing]);
+
+  const doFinish = useCallback(async () => {
     setIsFinishing(true);
     try {
       await finishActive({ sessionId });
@@ -127,7 +132,7 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
       console.error("Failed to finish workout:", err);
       setIsFinishing(false);
     }
-  }, [finishActive, isFinishing, router, sessionId]);
+  }, [finishActive, router, sessionId]);
 
   const handleSaveExit = useCallback(() => {
     router.push("/dashboard");
@@ -197,9 +202,8 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm("Discard this workout and all logged sets?")) {
-                        void handleDiscard();
-                      }
+                      setShowExitMenu(false);
+                      setConfirmModal({ type: "discard" });
                     }}
                     className="w-full text-left px-4 py-3 text-sm transition-colors active:bg-white/5"
                     style={{ fontFamily: "var(--font-display)", color: "#ff2d2d" }}
@@ -267,6 +271,26 @@ function ActiveWorkoutShell({ sessionId }: { sessionId: Id<"workoutSessions"> })
 
         <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal !== null}
+        onClose={() => setConfirmModal(null)}
+        onConfirm={() => {
+          if (confirmModal?.type === "finish") {
+            void doFinish();
+          } else if (confirmModal?.type === "discard") {
+            void handleDiscard();
+          }
+        }}
+        title={confirmModal?.type === "finish" ? "Finish Workout" : "Discard Workout"}
+        description={
+          confirmModal?.type === "finish"
+            ? "Finish this workout?"
+            : "Discard this workout and all logged sets?"
+        }
+        confirmLabel={confirmModal?.type === "finish" ? "Finish" : "Discard"}
+        isDestructive={confirmModal?.type === "discard"}
+      />
     </WorkoutProvider>
   );
 }

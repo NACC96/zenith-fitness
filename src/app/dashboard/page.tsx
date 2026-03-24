@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
@@ -30,22 +30,33 @@ import FatigueCurve from "@/components/FatigueCurve";
 import FrequencyHeatmap from "@/components/FrequencyHeatmap";
 import PersonalRecords from "@/components/PersonalRecords";
 import { useSectionPreviews } from "@/hooks/useSectionPreviews";
+import { useDashboardChat } from "@/hooks/useDashboardChat";
 
 export default function DashboardPage() {
-  const STREAM_UI_FLUSH_MS = 50;
   const router = useRouter();
-  const streamFlushTimeoutRef = useRef<number | null>(null);
-  const streamPendingContentRef = useRef("");
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [selectedSession, setSelectedSession] = useState<WorkoutSession | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("anthropic/claude-sonnet-4.6");
-  const [modelInitialized, setModelInitialized] = useState(false);
-  const [activeSessionId, setActiveSessionId] = useState<Id<"chatSessions"> | null>(null);
-  const [streamingContent, setStreamingContent] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+
+  const {
+    messages: chatMessages,
+    sessions,
+    activeSessionId,
+    isStreaming,
+    streamingContent,
+    selectedModel,
+    sendMessage: handleSendMessage,
+    onModelChange: handleModelChange,
+    onClearChat: handleClearChat,
+    onNewChat: handleNewChat,
+    onSelectSession: selectChatSession,
+    onDeleteSession: deleteChatSession,
+  } = useDashboardChat();
+
+  // Streaming replaces the old "last message is user" loading check
+  const isChatLoading = isStreaming;
 
   const rawWorkouts = useQuery(api.workoutSessions.listAll);
   const workoutTypes = useQuery(api.workoutTypes.list);
@@ -62,35 +73,6 @@ export default function DashboardPage() {
   // Workout session deletion
   const deleteWorkoutSession = useMutation(api.workoutSessions.remove);
 
-  // Chat sessions
-  const sessionsRaw = useQuery(api.chatSessions.list);
-  const sessions = useMemo(() => sessionsRaw ?? [], [sessionsRaw]);
-  const createSession = useMutation(api.chatSessions.create);
-  const deleteSession = useMutation(api.chatSessions.remove);
-
-  // Chat: Convex queries and mutations
-  const chatMessagesRaw = useQuery(
-    api.chatMessages.list,
-    activeSessionId ? { sessionId: activeSessionId } : "skip"
-  );
-  const chatMessages = useMemo(() => chatMessagesRaw ?? [], [chatMessagesRaw]);
-  const sendMessage = useMutation(api.chatMessages.send);
-  const clearChat = useMutation(api.chatMessages.clear);
-  const savedModel = useQuery(api.settings.get, { key: "selectedModel" });
-  const saveModel = useMutation(api.settings.set);
-
-  // Streaming replaces the old "last message is user" loading check
-  const isChatLoading = isStreaming;
-
-  // Auto-create or select first session on load
-  useEffect(() => {
-    if (sessions.length === 0 && activeSessionId === null) {
-      createSession().then((id) => setActiveSessionId(id));
-    } else if (activeSessionId === null && sessions.length > 0) {
-      setActiveSessionId(sessions[0]._id);
-    }
-  }, [sessions, activeSessionId, createSession]);
-
   const filterOptions = useMemo(
     () => ["All", ...(workoutTypes?.map((t) => t.name) ?? [])],
     [workoutTypes],
@@ -105,167 +87,6 @@ export default function DashboardPage() {
   );
 
   const previews = useSectionPreviews(allWorkouts, filteredSessions);
-
-  // Sync saved model preference from Convex
-  useEffect(() => {
-    if (savedModel && !modelInitialized) {
-      setSelectedModel(savedModel);
-      setModelInitialized(true);
-    }
-  }, [savedModel, modelInitialized]);
-
-  const flushStreamingContent = useCallback((content: string, immediate = false) => {
-    const flush = () => {
-      streamFlushTimeoutRef.current = null;
-      setStreamingContent(streamPendingContentRef.current);
-    };
-
-    streamPendingContentRef.current = content;
-    if (immediate) {
-      if (streamFlushTimeoutRef.current !== null) {
-        window.clearTimeout(streamFlushTimeoutRef.current);
-        streamFlushTimeoutRef.current = null;
-      }
-      flush();
-      return;
-    }
-
-    if (streamFlushTimeoutRef.current !== null) return;
-    streamFlushTimeoutRef.current = window.setTimeout(flush, STREAM_UI_FLUSH_MS);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (streamFlushTimeoutRef.current !== null) {
-        window.clearTimeout(streamFlushTimeoutRef.current);
-        streamFlushTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleSendMessage = useCallback(async (content: string, images?: string[]) => {
-    if (!activeSessionId || isStreaming) return;
-
-    // 1. Save user message to DB via mutation
-    await sendMessage({ sessionId: activeSessionId, content, images, model: selectedModel });
-
-    // 2. Build message history from recent messages
-    const recentMessages = chatMessages.slice(-20).map((m) => ({
-      role: m.role,
-      content: m.content,
-      ...(m.images ? { images: m.images } : {}),
-    }));
-
-    // 3. Start streaming
-    setIsStreaming(true);
-    setStreamingContent("");
-
-    try {
-      const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-      const baseUrl =
-        siteUrl ||
-        (process.env.NEXT_PUBLIC_CONVEX_URL?.replace(".cloud", ".site") ?? "");
-
-      const response = await fetch(`${baseUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: activeSessionId,
-          content,
-          images,
-          model: selectedModel,
-          messageHistory: recentMessages,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (!data) continue;
-
-          try {
-            const parsed = JSON.parse(data);
-
-            if (parsed.token) {
-              accumulated += parsed.token;
-              flushStreamingContent(accumulated);
-            } else if (parsed.done) {
-              break;
-            } else if (parsed.error) {
-              console.error("Stream error:", parsed.error);
-              break;
-            }
-            // parsed.thinking — AI is processing tools, streaming continues
-          } catch {
-            // Skip unparseable lines
-          }
-        }
-      }
-      flushStreamingContent(accumulated, true);
-    } catch (error) {
-      console.error("Streaming failed:", error);
-    } finally {
-      if (streamFlushTimeoutRef.current !== null) {
-        window.clearTimeout(streamFlushTimeoutRef.current);
-        streamFlushTimeoutRef.current = null;
-      }
-      streamPendingContentRef.current = "";
-      setIsStreaming(false);
-      setStreamingContent("");
-    }
-  }, [
-    activeSessionId,
-    chatMessages,
-    flushStreamingContent,
-    isStreaming,
-    selectedModel,
-    sendMessage,
-  ]);
-
-  const handleModelChange = useCallback((model: string) => {
-    setSelectedModel(model);
-    saveModel({ key: "selectedModel", value: model });
-  }, [saveModel]);
-
-  const handleClearChat = useCallback(async () => {
-    if (!activeSessionId) return;
-    await clearChat({ sessionId: activeSessionId });
-  }, [activeSessionId, clearChat]);
-
-  const handleNewChat = useCallback(async () => {
-    const id = await createSession();
-    setActiveSessionId(id);
-  }, [createSession]);
-
-  const handleDeleteSession = useCallback(async (sessionId: Id<"chatSessions">) => {
-    await deleteSession({ sessionId });
-    if (activeSessionId === sessionId) {
-      const remaining = sessions.filter((s) => s._id !== sessionId);
-      if (remaining.length > 0) {
-        setActiveSessionId(remaining[0]._id);
-      } else {
-        const id = await createSession();
-        setActiveSessionId(id);
-      }
-    }
-  }, [activeSessionId, createSession, deleteSession, sessions]);
 
   const handleDeleteWorkout = async (sessionId: string) => {
     try {
@@ -289,14 +110,6 @@ export default function DashboardPage() {
   const closeChat = useCallback(() => {
     setIsChatOpen(false);
   }, []);
-
-  const selectChatSession = useCallback((id: string) => {
-    setActiveSessionId(id as Id<"chatSessions">);
-  }, []);
-
-  const deleteChatSession = useCallback((id: string) => {
-    void handleDeleteSession(id as Id<"chatSessions">);
-  }, [handleDeleteSession]);
 
   if (rawWorkouts === undefined || workoutTypes === undefined) {
     return (

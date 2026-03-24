@@ -5,7 +5,7 @@ export default function Home() {
     <main className="flex min-h-screen items-center justify-center p-8">
       <div className="text-center">
         <h1
-          className="text-4xl font-bold tracking-[0.25em] text-lime"
+          className="text-4xl font-bold tracking-[0.25em] text-accent"
           style={{ fontFamily: "var(--font-logo)" }}
         >
           ZENITH

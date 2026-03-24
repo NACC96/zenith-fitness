@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 
 /**
@@ -6,13 +7,13 @@ import { v } from "convex/values";
  * destructive operations (delete, set removal, bulk update).
  */
 export async function writeAuditLog(
-  ctx: { db: any },
+  ctx: MutationCtx,
   entry: {
     action: string;
     table: string;
     documentId: string;
-    snapshot: any;
-    metadata?: any;
+    snapshot: unknown;
+    metadata?: unknown;
   }
 ) {
   await ctx.db.insert("auditLog", {

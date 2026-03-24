@@ -1,9 +1,10 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import type { WorkoutSession } from "@/lib/types";
 import { calcVolume, calcWorkoutVolume, formatNum } from "@/lib/utils";
 import GlassCard from "@/components/GlassCard";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface SessionListProps {
   workouts: WorkoutSession[];
@@ -31,6 +32,8 @@ export default memo(function SessionList({
   onDelete,
   onAddType,
 }: SessionListProps) {
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
   const sorted = useMemo(
     () => [...workouts].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -126,8 +129,7 @@ export default memo(function SessionList({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!confirm("Delete this workout session and all its exercises?")) return;
-                        onDelete(workout.id);
+                        setDeleteTarget(workout.id);
                       }}
                       className="ml-1 flex items-center justify-center rounded-md cursor-pointer"
                       style={{
@@ -207,6 +209,20 @@ export default memo(function SessionList({
           );
         })}
       </div>
+
+      <ConfirmModal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget !== null && onDelete) {
+            onDelete(deleteTarget);
+          }
+        }}
+        title="Delete Session"
+        description="Delete this workout session and all its exercises?"
+        confirmLabel="Delete"
+        isDestructive
+      />
     </div>
   );
 });

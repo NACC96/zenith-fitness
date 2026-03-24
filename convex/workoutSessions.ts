@@ -1,4 +1,6 @@
 import { query, mutation } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { writeAuditLog } from "./auditLog";
 
@@ -60,14 +62,14 @@ function resolveSetTimingBounds(exercises: ExerciseWithTimedSets[]) {
 
 // Hydrate a list of sessions with exercises and computed timing
 async function hydrateSessions(
-  ctx: any,
-  sessions: any[]
+  ctx: QueryCtx,
+  sessions: Doc<"workoutSessions">[]
 ) {
   return Promise.all(
-    sessions.map(async (session: any) => {
+    sessions.map(async (session) => {
       const exercises = await ctx.db
         .query("exercises")
-        .withIndex("by_session", (q: any) => q.eq("sessionId", session._id))
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
         .collect();
       const { earliestStartedAt, latestEndedAt } = resolveSetTimingBounds(exercises);
       const firstSetStartedAt = session.firstSetStartedAt ?? earliestStartedAt;
@@ -84,7 +86,7 @@ async function hydrateSessions(
         firstSetStartedAt,
         lastSetEndedAt,
         duration,
-        exercises: exercises.map((ex: any) => ({
+        exercises: exercises.map((ex) => ({
           name: ex.name,
           sets: ex.sets,
         })),
