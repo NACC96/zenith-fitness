@@ -22,13 +22,6 @@ export default function TrackTab() {
     sessionId ? { sessionId } : "skip"
   );
 
-  // Only suggest a new exercise after 4+ sets on the last one
-  const lastExerciseDone = useMemo(() => {
-    if (!exercises || exercises.length === 0) return true;
-    const last = exercises[exercises.length - 1];
-    return last.sets.length >= 4;
-  }, [exercises]);
-
   // The exercise the user was just doing (for "Next Set" button)
   const lastExercise = useMemo(() => {
     if (!exercises || exercises.length === 0) return null;
@@ -38,7 +31,7 @@ export default function TrackTab() {
     return { name: last.name, lastWeight: lastSet.weight, lastReps: lastSet.reps, setNumber: last.sets.length + 1 };
   }, [exercises]);
 
-  const shouldSuggest = sessionId && !activeSet && lastExerciseDone;
+  const shouldSuggest = sessionId && !activeSet;
 
   const allSuggestions = useQuery(
     api.exerciseSuggestions.suggestAll,
@@ -117,48 +110,51 @@ export default function TrackTab() {
           lastReps={currentExercise.lastReps}
           setNumber={currentExercise.setNumber}
         />
-      ) : !lastExerciseDone && lastExercise ? (
-        <div className="px-5">
-          <div className="text-center mb-5">
-            <h2
-              className="text-xl font-bold text-white"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {lastExercise.name}
-            </h2>
-            <p
-              className="text-[11px] mt-1 uppercase tracking-[0.1em]"
-              style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.35)" }}
-            >
-              Set {lastExercise.setNumber} · Last: {lastExercise.lastWeight}×{lastExercise.lastReps}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleAcceptSuggestion(lastExercise.name)}
-            className="w-full rounded-xl py-4 text-center transition-all active:scale-[0.97]"
-            style={{
-              background: "rgba(255,45,45,0.15)",
-              border: "1px solid rgba(255,45,45,0.3)",
-              boxShadow: "0 0 30px rgba(255,45,45,0.1)",
-            }}
-          >
-            <div
-              className="font-bold text-lg"
-              style={{ fontFamily: "var(--font-display)", color: "#ff2d2d" }}
-            >
-              Start Set {lastExercise.setNumber}
-            </div>
-          </button>
-        </div>
       ) : (
-        <ExerciseSuggestion
-          topSuggestion={allSuggestions?.[0] ?? null}
-          allSuggestions={allSuggestions ?? []}
-          showAll={showAll}
-          onAccept={handleAcceptSuggestion}
-          onSkip={handleSkipTop}
-        />
+        <>
+          {lastExercise && (
+            <div className="px-5 mb-6">
+              <div className="text-center mb-5">
+                <h2
+                  className="text-xl font-bold text-white"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {lastExercise.name}
+                </h2>
+                <p
+                  className="text-[11px] mt-1 uppercase tracking-[0.1em]"
+                  style={{ fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.35)" }}
+                >
+                  Set {lastExercise.setNumber} · Last: {lastExercise.lastWeight}×{lastExercise.lastReps}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleAcceptSuggestion(lastExercise.name)}
+                className="w-full rounded-xl py-4 text-center transition-all active:scale-[0.97]"
+                style={{
+                  background: "rgba(255,45,45,0.15)",
+                  border: "1px solid rgba(255,45,45,0.3)",
+                  boxShadow: "0 0 30px rgba(255,45,45,0.1)",
+                }}
+              >
+                <div
+                  className="font-bold text-lg"
+                  style={{ fontFamily: "var(--font-display)", color: "#ff2d2d" }}
+                >
+                  Start Set {lastExercise.setNumber}
+                </div>
+              </button>
+            </div>
+          )}
+          <ExerciseSuggestion
+            topSuggestion={allSuggestions?.[0] ?? null}
+            allSuggestions={allSuggestions ?? []}
+            showAll={showAll || !!lastExercise}
+            onAccept={handleAcceptSuggestion}
+            onSkip={handleSkipTop}
+          />
+        </>
       )}
 
       {/* Completed exercises */}
