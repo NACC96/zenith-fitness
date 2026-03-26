@@ -137,8 +137,10 @@ export default function ExerciseDetailSheet({
                   {Array.from({ length: maxRows }).map((_, i) => {
                     const cur = currentSets[i];
                     const prev = prevSets[i];
-                    const better = cur && prev && cur.weight > prev.weight;
-                    const worse = cur && prev && cur.weight < prev.weight;
+                    const curVol = cur ? cur.weight * cur.reps : 0;
+                    const prevVol = prev ? prev.weight * prev.reps : 0;
+                    const better = cur && prev && curVol > prevVol;
+                    const worse = cur && prev && curVol < prevVol;
 
                     return (
                       <div
