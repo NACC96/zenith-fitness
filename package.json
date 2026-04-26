@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "rm -rf .test-build && tsc --module commonjs --target ES2022 --moduleResolution node --outDir .test-build --skipLibCheck tests/*.test.ts convex/lib/*.ts && node --test .test-build/tests/*.test.js"
+    "test": "node -e \"require('node:fs').rmSync('.test-build',{recursive:true,force:true})\" && tsc -p tsconfig.test.json && node scripts/run-compiled-tests.mjs"
   },
   "dependencies": {
     "convex": "^1.32.0",

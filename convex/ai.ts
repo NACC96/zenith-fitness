@@ -4,10 +4,11 @@ import { Id } from "./_generated/dataModel";
 import {
   getCorsHeaders,
   isAllowedOrigin,
+  MAX_CHAT_REQUEST_BODY_BYTES,
   parseAllowedOrigins,
   validateChatRequestBody,
 } from "./lib/httpSecurity";
-import { normalizeIsoDate, normalizeRequiredLabel, validateLoggedSets, validateWorkoutSet } from "./lib/workoutValidation";
+import { normalizeIsoDate, normalizeRequiredLabel, validateLoggedSets, validateWeight, validateWorkoutSet } from "./lib/workoutValidation";
 
 function getGeneralSystemPrompt(): string {
   const today = new Date().toISOString().split("T")[0];
@@ -370,6 +371,61 @@ const TOOLS = [
 ];
 
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+type JsonBodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; error: string; status: number };
+
+async function readJsonBodyWithLimit(request: Request): Promise<JsonBodyResult> {
+  const contentLength = request.headers.get("Content-Length");
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (!Number.isFinite(declaredBytes) || declaredBytes < 0) {
+      return { ok: false, error: "Invalid Content-Length header", status: 400 };
+    }
+    if (declaredBytes > MAX_CHAT_REQUEST_BODY_BYTES) {
+      return { ok: false, error: "Request body is too large", status: 413 };
+    }
+  }
+
+  if (!request.body) {
+    return { ok: false, error: "Invalid JSON body", status: 400 };
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_CHAT_REQUEST_BODY_BYTES) {
+        await reader.cancel();
+        return { ok: false, error: "Request body is too large", status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, error: "Invalid JSON body", status: 400 };
+  }
+
+  const bodyBytes = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(decoder.decode(bodyBytes)) };
+  } catch {
+    return { ok: false, error: "Invalid JSON body", status: 400 };
+  }
+}
 
 function sseHeaders(
   origin: string | null,
@@ -402,6 +458,7 @@ export const streamChat = httpAction(async (ctx, request) => {
   const allowedOrigins = parseAllowedOrigins(process.env.ZENITH_ALLOWED_ORIGINS);
   const allowLocalOrigins = process.env.ZENITH_ALLOW_LOCAL_ORIGINS === "true";
 
+  // Browser-only endpoint: requests without an Origin header remain forbidden.
   if (!isAllowedOrigin(origin, allowedOrigins, allowLocalOrigins)) {
     return new Response("Forbidden", {
       status: 403,
@@ -409,14 +466,12 @@ export const streamChat = httpAction(async (ctx, request) => {
     });
   }
 
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
-    return sseError("Invalid JSON body", 400, origin, allowedOrigins, allowLocalOrigins);
+  const rawBody = await readJsonBodyWithLimit(request);
+  if (rawBody.ok === false) {
+    return sseError(rawBody.error, rawBody.status, origin, allowedOrigins, allowLocalOrigins);
   }
 
-  const validation = validateChatRequestBody(rawBody);
+  const validation = validateChatRequestBody(rawBody.value);
   if (validation.ok === false) {
     return sseError(validation.error, 400, origin, allowedOrigins, allowLocalOrigins);
   }
@@ -789,7 +844,7 @@ async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string)
 }
 
 async function handleGetHistory(ctx: any, args: any): Promise<string> {
-  const requestedLimit = typeof args.limit === "number" ? Math.trunc(args.limit) : 10;
+  const requestedLimit = typeof args.limit === "number" && Number.isFinite(args.limit) ? Math.trunc(args.limit) : 10;
   const limit = Math.min(Math.max(requestedLimit, 1), 50);
   const type = args.type ? normalizeRequiredLabel(args.type, "type") : undefined;
   let limited = type
@@ -1012,7 +1067,7 @@ async function handleStartSet(ctx: any, args: any, workoutSessionId?: string): P
     const exerciseName = normalizeRequiredLabel(args.exerciseName, "exerciseName");
     const weight = args.weight === undefined
       ? undefined
-      : validateWorkoutSet({ weight: args.weight, reps: 1 }).weight;
+      : validateWeight(args.weight);
     const result = await ctx.runMutation(api.exercises.startSet, {
       sessionId: sessionId as Id<"workoutSessions">,
       exerciseName,

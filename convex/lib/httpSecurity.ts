@@ -13,11 +13,40 @@ export const ALLOWED_MODELS = [
   "deepseek/deepseek-v3.2",
 ] as const;
 
+export type AllowedModel = (typeof ALLOWED_MODELS)[number];
+
+const MODEL_LABELS: Record<AllowedModel, string> = {
+  "google/gemini-3.1-pro-preview": "Gemini 3.1 Pro",
+  "google/gemini-3.1-pro-preview-customtools": "Gemini 3.1 Pro CT",
+  "anthropic/claude-sonnet-4.6": "Claude Sonnet 4.6",
+  "minimax/minimax-m2.5": "MiniMax M2.5",
+  "z-ai/glm-5": "GLM-5",
+  "z-ai/glm-5-turbo": "GLM-5 Turbo",
+  "x-ai/grok-4.20-beta": "Grok 4.20",
+  "x-ai/grok-4.20-multi-agent-beta": "Grok 4.20 MA",
+  "moonshotai/kimi-k2.5": "Kimi K2.5",
+  "deepseek/deepseek-v3.2": "DeepSeek V3.2",
+};
+
+export const CHAT_MODEL_OPTIONS = ALLOWED_MODELS.map((value) => ({
+  value,
+  label: MODEL_LABELS[value],
+}));
+
+export const WORKOUT_CHAT_MODEL_OPTIONS = [
+  { id: "anthropic/claude-sonnet-4.6", label: "Sonnet" },
+  { id: "x-ai/grok-4.20-beta", label: "Grok" },
+  { id: "z-ai/glm-5-turbo", label: "GLM" },
+] as const satisfies readonly { id: AllowedModel; label: string }[];
+
 const MAX_CONTENT_LENGTH = 8_000;
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_HISTORY_CONTENT_LENGTH = 12_000;
 const MAX_IMAGES = 3;
 const MAX_IMAGE_DATA_URL_LENGTH = 4_000_000;
+const JSON_BODY_OVERHEAD_BYTES = 32_000;
+export const MAX_CHAT_REQUEST_BODY_BYTES =
+  MAX_CONTENT_LENGTH + MAX_HISTORY_CONTENT_LENGTH + MAX_IMAGES * MAX_IMAGE_DATA_URL_LENGTH + JSON_BODY_OVERHEAD_BYTES;
 
 export type ChatRole = "user" | "assistant";
 
@@ -28,7 +57,7 @@ export type ValidatedHistoryMessage = {
 };
 
 export type ValidatedChatRequest = {
-  sessionId?: string;
+  sessionId: string;
   content: string;
   model: string;
   messageHistory: ValidatedHistoryMessage[];
@@ -76,7 +105,7 @@ export function getCorsHeaders(
   allowedOrigins: readonly string[],
   allowLocalOrigins = false,
 ) {
-  const allowedOrigin = origin && isAllowedOrigin(origin, allowedOrigins, allowLocalOrigins) ? origin : allowedOrigins[0];
+  const allowedOrigin = origin && isAllowedOrigin(origin, allowedOrigins, allowLocalOrigins) ? origin : allowedOrigins[0] ?? "null";
 
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
@@ -153,9 +182,6 @@ export function validateChatRequestBody(body: unknown): ValidationResult<Validat
   const imagesResult = validateImages(body.images);
   if (imagesResult.ok === false) return { ok: false, error: imagesResult.error };
 
-  if (body.sessionId !== undefined && typeof body.sessionId !== "string") {
-    return { ok: false, error: "sessionId must be a string" };
-  }
   if (typeof body.sessionId !== "string" || body.sessionId.trim().length === 0) {
     return { ok: false, error: "sessionId is required" };
   }
@@ -163,13 +189,12 @@ export function validateChatRequestBody(body: unknown): ValidationResult<Validat
     return { ok: false, error: "workoutSessionId must be a string" };
   }
 
-  const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
   const workoutSessionId = typeof body.workoutSessionId === "string" ? body.workoutSessionId : undefined;
 
   return {
     ok: true,
     value: {
-      sessionId,
+      sessionId: body.sessionId,
       workoutSessionId,
       content: body.content,
       model: body.model,

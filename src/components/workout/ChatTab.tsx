@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WORKOUT_CHAT_MODEL_OPTIONS } from "@convex/lib/httpSecurity";
 import { useWorkout } from "@/contexts/WorkoutContext";
 import { useWorkoutChat } from "@/hooks/useWorkoutChat";
 import type { WorkoutContext } from "@/hooks/useWorkoutChat";
@@ -67,11 +68,7 @@ export default function ChatTab({ isVisible }: ChatTabProps) {
     [],
   );
 
-  const MODELS = [
-    { id: "anthropic/claude-sonnet-4.6", label: "Sonnet" },
-    { id: "x-ai/grok-4.20-beta", label: "Grok" },
-    { id: "z-ai/glm-5-turbo", label: "GLM" },
-  ] as const;
+  const MODELS = WORKOUT_CHAT_MODEL_OPTIONS;
 
   return (
     <div className="flex flex-col h-full pb-[4.5rem]" style={{ background: "var(--color-obsidian)" }}>

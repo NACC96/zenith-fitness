@@ -3,14 +3,21 @@ export type BasicWorkoutSet = {
   reps: number;
 };
 
-const MAX_LABEL_LENGTH = 120;
-const MAX_WEIGHT = 2_000;
-const MAX_REPS = 1_000;
+export const MAX_LABEL_LENGTH = 120;
+export const MAX_WEIGHT = 2_000;
+export const MAX_REPS = 1_000;
 
-export function validateWorkoutSet<T extends BasicWorkoutSet>(set: T): T {
-  if (!Number.isFinite(set.weight) || set.weight < 0 || set.weight > MAX_WEIGHT) {
+const ASCII_CONTROL_CHARACTER_PATTERN = /[\x00-\x1F\x7F]/;
+
+export function validateWeight(weight: number): number {
+  if (!Number.isFinite(weight) || weight < 0 || weight > MAX_WEIGHT) {
     throw new Error(`weight must be a non-negative finite number no greater than ${MAX_WEIGHT}`);
   }
+  return weight;
+}
+
+export function validateWorkoutSet<T extends BasicWorkoutSet>(set: T): T {
+  validateWeight(set.weight);
   if (!Number.isInteger(set.reps) || set.reps < 1 || set.reps > MAX_REPS) {
     throw new Error(`reps must be a positive integer no greater than ${MAX_REPS}`);
   }
@@ -31,6 +38,9 @@ export function normalizeRequiredLabel(value: unknown, fieldName: string): strin
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     throw new Error(`${fieldName} is required`);
+  }
+  if (ASCII_CONTROL_CHARACTER_PATTERN.test(trimmed)) {
+    throw new Error(`${fieldName} contains invalid control characters`);
   }
   if (trimmed.length > MAX_LABEL_LENGTH) {
     throw new Error(`${fieldName} is too long`);

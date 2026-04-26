@@ -31,7 +31,8 @@
 - Create: `tests/httpSecurity.test.ts`
 
 **Behaviors:**
-- Allowed origins: configured origins, localhost development origins, empty origin for same-origin/server-to-server requests.
+- Allowed origins: configured origins and optional localhost development origins.
+- Requests without an `Origin` header are rejected because `/api/chat` is browser-facing.
 - Disallowed origins return false.
 - Only server allowlisted model IDs pass.
 - Content length, message history count/length, image count, and image size are capped.
@@ -82,7 +83,7 @@
 
 ## Task 6: Fix workout history/stats semantics and ordering
 
-**Objective:** Use the `by_date` and `by_type` indexes where appropriate, and stop calling recent-only stats “all-time”.
+**Objective:** Use the `by_date` and `by_type_date` indexes where appropriate, and stop calling recent-only stats “all-time”.
 
 **Files:**
 - Modify: `convex/workoutSessions.ts`
@@ -90,7 +91,7 @@
 
 **Changes:**
 - `listAll` / `listRecent`: order by `by_date` if workout date semantics are desired.
-- Add a `listRecentByType` query for type-filtered history.
+- Add a `listRecentByType` query that uses the composite `by_type_date` index for type-filtered history.
 - Rename AI stat outputs to recent/current-window stats unless implementing a true all-time query.
 
 ## Task 7: Cleanup lint/tooling/package manager issues

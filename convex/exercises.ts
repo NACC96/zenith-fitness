@@ -2,7 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { writeAuditLog } from "./auditLog";
-import { normalizeRequiredLabel, validateLoggedSets, validateWorkoutSet } from "./lib/workoutValidation";
+import { normalizeRequiredLabel, validateLoggedSets, validateWeight, validateWorkoutSet } from "./lib/workoutValidation";
 
 const timedSetValidator = v.object({
   weight: v.number(),
@@ -204,7 +204,7 @@ export const startSet = mutation({
     const exerciseName = normalizeRequiredLabel(args.exerciseName, "exerciseName");
     const validatedWeight = args.weight === undefined
       ? undefined
-      : validateWorkoutSet({ weight: args.weight, reps: 1 }).weight;
+      : validateWeight(args.weight);
 
     await ctx.db.patch(args.sessionId, {
       firstSetStartedAt: session.firstSetStartedAt ?? now,
