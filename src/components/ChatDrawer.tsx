@@ -124,7 +124,7 @@ export default function ChatDrawer({
     previousMessageCountRef.current = messages.length;
     previousStreamingLengthRef.current = streamingContent.length;
     scrollToBottom("auto");
-  }, [activeSessionId, isOpen, scrollToBottom]);
+  }, [activeSessionId, isOpen, messages.length, scrollToBottom, streamingContent.length]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -630,6 +630,7 @@ export default function ChatDrawer({
                   {msg.role === "user" && msg.images && msg.images.length > 0 && (
                     <div className="flex flex-wrap gap-1.5" style={{ marginBottom: msg.content ? "8px" : 0 }}>
                       {msg.images.map((img, idx) => (
+                        // eslint-disable-next-line @next/next/no-img-element -- Data URL chat thumbnails are already client-side previews, not optimizable remote assets.
                         <img
                           key={idx}
                           src={img}
@@ -749,6 +750,7 @@ export default function ChatDrawer({
                       background: "rgba(255,255,255,0.04)",
                     }}
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Data URL attachment previews are already local client-side thumbnails. */}
                     <img
                       src={img}
                       alt={`Attached ${idx + 1}`}

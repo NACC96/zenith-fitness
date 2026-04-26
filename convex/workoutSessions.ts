@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { writeAuditLog } from "./auditLog";
+import { normalizeIsoDate, normalizeRequiredLabel } from "./lib/workoutValidation";
 
 type TimedSetLike = {
   startedAt?: number;
@@ -99,6 +100,7 @@ export const listAll = query({
   handler: async (ctx) => {
     const sessions = await ctx.db
       .query("workoutSessions")
+      .withIndex("by_date")
       .order("desc")
       .collect();
     return hydrateSessions(ctx, sessions);
@@ -112,6 +114,21 @@ export const listRecent = query({
     const take = args.limit ?? 50;
     const sessions = await ctx.db
       .query("workoutSessions")
+      .withIndex("by_date")
+      .order("desc")
+      .take(take);
+    return hydrateSessions(ctx, sessions);
+  },
+});
+
+export const listRecentByType = query({
+  args: { type: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const type = normalizeRequiredLabel(args.type, "type");
+    const take = args.limit ?? 50;
+    const sessions = await ctx.db
+      .query("workoutSessions")
+      .withIndex("by_type_date", (q) => q.eq("type", type))
       .order("desc")
       .take(take);
     return hydrateSessions(ctx, sessions);
@@ -150,10 +167,12 @@ export const create = mutation({
     label: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const computedLabel = formatSessionLabel(args.date);
+    const type = normalizeRequiredLabel(args.type, "type");
+    const date = normalizeIsoDate(args.date);
+    const computedLabel = formatSessionLabel(date);
     return await ctx.db.insert("workoutSessions", {
-      type: args.type,
-      date: args.date,
+      type,
+      date,
       label: computedLabel,
     });
   },
@@ -184,10 +203,11 @@ export const createActive = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const today = new Date().toISOString().split("T")[0];
+    const type = args.type ? normalizeRequiredLabel(args.type, "type") : "General";
     return await ctx.db.insert("workoutSessions", {
       label: "Active Workout",
       date: today,
-      type: args.type ?? "General",
+      type,
       status: "active",
       startTime: now,
       workoutTypeId: args.workoutTypeId,
@@ -199,7 +219,8 @@ export const createActive = mutation({
 export const updateType = mutation({
   args: { sessionId: v.id("workoutSessions"), type: v.string() },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.sessionId, { type: args.type });
+    const type = normalizeRequiredLabel(args.type, "type");
+    await ctx.db.patch(args.sessionId, { type });
   },
 });
 

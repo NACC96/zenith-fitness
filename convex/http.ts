@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { streamChat } from "./ai";
+import { getCorsHeaders, isAllowedOrigin, parseAllowedOrigins } from "./lib/httpSecurity";
 
 const http = httpRouter();
 
@@ -13,13 +14,19 @@ http.route({
 http.route({
   path: "/api/chat",
   method: "OPTIONS",
-  handler: httpAction(async () => {
+  handler: httpAction(async (_ctx, request) => {
+    const origin = request.headers.get("Origin");
+    const allowedOrigins = parseAllowedOrigins(process.env.ZENITH_ALLOWED_ORIGINS);
+    const allowLocalOrigins = process.env.ZENITH_ALLOW_LOCAL_ORIGINS === "true";
+    if (!isAllowedOrigin(origin, allowedOrigins, allowLocalOrigins)) {
+      return new Response(null, {
+        status: 403,
+        headers: getCorsHeaders(origin, allowedOrigins, allowLocalOrigins),
+      });
+    }
+
     return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
+      headers: getCorsHeaders(origin, allowedOrigins, allowLocalOrigins),
     });
   }),
 });

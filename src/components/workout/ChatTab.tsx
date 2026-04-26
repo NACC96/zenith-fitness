@@ -11,7 +11,7 @@ interface ChatTabProps {
 }
 
 export default function ChatTab({ isVisible }: ChatTabProps) {
-  const { sessionId, session } = useWorkout();
+  const { sessionId } = useWorkout();
   const { messages, isStreaming, streamingContent, sendMessage, pushContext, selectedModel, setSelectedModel } =
     useWorkoutChat(sessionId);
 

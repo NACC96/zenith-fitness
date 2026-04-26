@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { writeAuditLog } from "./auditLog";
+import { normalizeRequiredLabel, validateLoggedSets, validateWorkoutSet } from "./lib/workoutValidation";
 
 const timedSetValidator = v.object({
   weight: v.number(),
@@ -138,10 +139,12 @@ export const add = mutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) throw new Error("Session not found");
-    if (args.sets.length === 0) throw new Error("At least one set is required");
+
+    const exerciseName = normalizeRequiredLabel(args.name, "exerciseName");
+    const validatedSets = validateLoggedSets(args.sets);
 
     const inferredAt = Date.now();
-    const normalizedSets = normalizeSetsWithTiming(args.sets, inferredAt);
+    const normalizedSets = normalizeSetsWithTiming(validatedSets, inferredAt);
     const earliestStartedAt = Math.min(
       ...normalizedSets.map((set) => set.startedAt ?? inferredAt)
     );
@@ -159,7 +162,7 @@ export const add = mutation({
     const exerciseId = await appendSetsToExercise(
       ctx,
       args.sessionId,
-      args.name,
+      exerciseName,
       normalizedSets,
       exercises
     );
@@ -198,19 +201,24 @@ export const startSet = mutation({
       await closeOpenRestFromList(ctx, exercises, now);
     }
 
+    const exerciseName = normalizeRequiredLabel(args.exerciseName, "exerciseName");
+    const validatedWeight = args.weight === undefined
+      ? undefined
+      : validateWorkoutSet({ weight: args.weight, reps: 1 }).weight;
+
     await ctx.db.patch(args.sessionId, {
       firstSetStartedAt: session.firstSetStartedAt ?? now,
       activeSet: {
-        exerciseName: args.exerciseName,
+        exerciseName,
         startedAt: now,
-        weight: args.weight,
+        weight: validatedWeight,
       },
       activeRestStartedAt: undefined,
     });
 
     return {
       sessionId: args.sessionId,
-      exerciseName: args.exerciseName,
+      exerciseName,
       startedAt: now,
     };
   },
@@ -233,7 +241,9 @@ export const completeSet = mutation({
     // This prevents the "exerciseName is required" crash when the active set
     // was already cleared by a race condition (e.g. AI and UI both calling
     // completeSet, or a Convex real-time lag).
-    let exerciseName = args.exerciseName ?? session.activeSet?.exerciseName;
+    let exerciseName = args.exerciseName
+      ? normalizeRequiredLabel(args.exerciseName, "exerciseName")
+      : session.activeSet?.exerciseName;
     if (!exerciseName) {
       // Fallback: use the most recently logged exercise in this session.
       const exercises = await collectSessionExercises(ctx, args.sessionId);
@@ -263,14 +273,11 @@ export const completeSet = mutation({
       await closeOpenRestFromList(ctx, exercises, startedAt);
     }
 
-    const roundedReps = Math.round(args.reps);
-    if (roundedReps < 1) {
-      throw new Error("reps must be at least 1");
-    }
+    const validatedSet = validateWorkoutSet({ weight: args.weight, reps: args.reps });
 
     const completedSet: TimedSet = {
-      weight: args.weight,
-      reps: roundedReps,
+      weight: validatedSet.weight,
+      reps: validatedSet.reps,
       startedAt,
       endedAt: now,
       restStartedAt: now,
@@ -346,6 +353,7 @@ export const update = mutation({
     sets: v.array(timedSetValidator),
   },
   handler: async (ctx, args) => {
+    const nextSets = validateLoggedSets(args.sets);
     const before = await ctx.db.get(args.exerciseId);
     if (before) {
       await writeAuditLog(ctx, {
@@ -353,10 +361,10 @@ export const update = mutation({
         table: "exercises",
         documentId: args.exerciseId,
         snapshot: { name: before.name, sets: before.sets },
-        metadata: { newSets: args.sets },
+        metadata: { newSets: nextSets },
       });
     }
-    await ctx.db.patch(args.exerciseId, { sets: args.sets });
+    await ctx.db.patch(args.exerciseId, { sets: nextSets });
   },
 });
 
