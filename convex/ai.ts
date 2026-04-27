@@ -1,6 +1,14 @@
 import { httpAction } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
+import {
+  getCorsHeaders,
+  isAllowedOrigin,
+  MAX_CHAT_REQUEST_BODY_BYTES,
+  parseAllowedOrigins,
+  validateChatRequestBody,
+} from "./lib/httpSecurity";
+import { normalizeIsoDate, normalizeRequiredLabel, validateLoggedSets, validateWeight, validateWorkoutSet } from "./lib/workoutValidation";
 
 function getGeneralSystemPrompt(): string {
   const today = new Date().toISOString().split("T")[0];
@@ -194,7 +202,7 @@ const TOOLS = [
     function: {
       name: "getExerciseStats",
       description:
-        "Get stats for a specific exercise across all sessions: max weight, total volume, estimated 1RM",
+        "Get recent stats for a specific exercise from the last 50 workout sessions: max weight, total volume, estimated 1RM",
       parameters: {
         type: "object",
         properties: {
@@ -363,20 +371,112 @@ const TOOLS = [
 ];
 
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
-function sseHeaders() {
+type JsonBodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; error: string; status: number };
+
+async function readJsonBodyWithLimit(request: Request): Promise<JsonBodyResult> {
+  const contentLength = request.headers.get("Content-Length");
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (!Number.isFinite(declaredBytes) || declaredBytes < 0) {
+      return { ok: false, error: "Invalid Content-Length header", status: 400 };
+    }
+    if (declaredBytes > MAX_CHAT_REQUEST_BODY_BYTES) {
+      return { ok: false, error: "Request body is too large", status: 413 };
+    }
+  }
+
+  if (!request.body) {
+    return { ok: false, error: "Invalid JSON body", status: 400 };
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_CHAT_REQUEST_BODY_BYTES) {
+        await reader.cancel();
+        return { ok: false, error: "Request body is too large", status: 413 };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { ok: false, error: "Invalid JSON body", status: 400 };
+  }
+
+  const bodyBytes = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(decoder.decode(bodyBytes)) };
+  } catch {
+    return { ok: false, error: "Invalid JSON body", status: 400 };
+  }
+}
+
+function sseHeaders(
+  origin: string | null,
+  allowedOrigins: readonly string[],
+  allowLocalOrigins: boolean,
+) {
   return {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    ...getCorsHeaders(origin, allowedOrigins, allowLocalOrigins),
   };
 }
 
+function sseError(
+  error: string,
+  status: number,
+  origin: string | null,
+  allowedOrigins: readonly string[],
+  allowLocalOrigins: boolean,
+) {
+  return new Response(
+    `data: ${JSON.stringify({ error })}\n\n`,
+    { status, headers: sseHeaders(origin, allowedOrigins, allowLocalOrigins) }
+  );
+}
+
 export const streamChat = httpAction(async (ctx, request) => {
-  const { sessionId, content, model, messageHistory, workoutSessionId, images } = await request.json();
+  const origin = request.headers.get("Origin");
+  const allowedOrigins = parseAllowedOrigins(process.env.ZENITH_ALLOWED_ORIGINS);
+  const allowLocalOrigins = process.env.ZENITH_ALLOW_LOCAL_ORIGINS === "true";
+
+  // Browser-only endpoint: requests without an Origin header remain forbidden.
+  if (!isAllowedOrigin(origin, allowedOrigins, allowLocalOrigins)) {
+    return new Response("Forbidden", {
+      status: 403,
+      headers: getCorsHeaders(origin, allowedOrigins, allowLocalOrigins),
+    });
+  }
+
+  const rawBody = await readJsonBodyWithLimit(request);
+  if (rawBody.ok === false) {
+    return sseError(rawBody.error, rawBody.status, origin, allowedOrigins, allowLocalOrigins);
+  }
+
+  const validation = validateChatRequestBody(rawBody.value);
+  if (validation.ok === false) {
+    return sseError(validation.error, 400, origin, allowedOrigins, allowLocalOrigins);
+  }
+
+  const { sessionId, content, model, messageHistory, workoutSessionId, images } = validation.value;
 
   let systemPrompt = getGeneralSystemPrompt();
   if (workoutSessionId) {
@@ -457,7 +557,7 @@ export const streamChat = httpAction(async (ctx, request) => {
   if (!apiKey) {
     return new Response(
       `data: ${JSON.stringify({ error: "OpenRouter API key not configured" })}\n\n`,
-      { headers: sseHeaders() }
+      { headers: sseHeaders(origin, allowedOrigins, allowLocalOrigins) }
     );
   }
 
@@ -465,7 +565,7 @@ export const streamChat = httpAction(async (ctx, request) => {
     async start(controller) {
       try {
         let fullResponse = "";
-        let currentMessages = [...messages];
+        const currentMessages = [...messages];
         const maxAttempts = 5;
         let attempt = 0;
 
@@ -679,11 +779,16 @@ export const streamChat = httpAction(async (ctx, request) => {
     },
   });
 
-  return new Response(stream, { headers: sseHeaders() });
+  return new Response(stream, { headers: sseHeaders(origin, allowedOrigins, allowLocalOrigins) });
 });
 
 // Tool handler implementations
 async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string): Promise<string> {
+  const type = normalizeRequiredLabel(args.type, "type");
+  const date = normalizeIsoDate(args.date);
+  const exerciseName = normalizeRequiredLabel(args.exerciseName, "exerciseName");
+  const sets = validateLoggedSets(args.sets);
+
   // In workout mode, use the active session directly
   const targetSessionId = args.sessionId || workoutSessionId;
 
@@ -701,15 +806,15 @@ async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string)
     // Find or create session by date+type — use recent sessions instead of all
     const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: 30 });
     const session = sessions.find(
-      (s: any) => s.date === args.date && s.type === args.type
+      (s: any) => s.date === date && s.type === type
     );
 
     if (!session) {
       sessionId = await ctx.runMutation(api.workoutSessions.create, {
-        type: args.type,
-        date: args.date,
+        type,
+        date,
       });
-      await ctx.runMutation(api.workoutTypes.create, { name: args.type });
+      await ctx.runMutation(api.workoutTypes.create, { name: type });
     } else {
       sessionId = session._id;
     }
@@ -717,39 +822,41 @@ async function handleLogExercise(ctx: any, args: any, workoutSessionId?: string)
 
   await ctx.runMutation(api.exercises.add, {
     sessionId,
-    name: args.exerciseName,
-    sets: args.sets,
+    name: exerciseName,
+    sets,
   });
 
-  const totalVolume = args.sets.reduce(
+  const totalVolume = sets.reduce(
     (sum: number, s: any) => sum + s.weight * s.reps,
     0
   );
-  const maxWeight = Math.max(...args.sets.map((s: any) => s.weight));
+  const maxWeight = Math.max(...sets.map((s: any) => s.weight));
 
   return JSON.stringify({
     success: true,
-    exerciseName: args.exerciseName,
-    sets: args.sets.length,
+    exerciseName,
+    sets: sets.length,
     totalVolume,
     maxWeight,
-    sessionDate: args.date,
-    sessionType: args.type,
+    sessionDate: date,
+    sessionType: type,
   });
 }
 
 async function handleGetHistory(ctx: any, args: any): Promise<string> {
-  const limit = args.limit || 10;
-  // Fetch only the amount we need (with headroom for type filtering)
-  const fetchLimit = args.type ? limit * 3 : limit;
-  const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: fetchLimit });
-  let filtered = sessions;
-  if (args.type) {
-    filtered = sessions.filter(
-      (s: any) => s.type.toLowerCase() === args.type.toLowerCase()
-    );
+  const requestedLimit = typeof args.limit === "number" && Number.isFinite(args.limit) ? Math.trunc(args.limit) : 10;
+  const limit = Math.min(Math.max(requestedLimit, 1), 50);
+  const type = args.type ? normalizeRequiredLabel(args.type, "type") : undefined;
+  let limited = type
+    ? await ctx.runQuery(api.workoutSessions.listRecentByType, { type, limit })
+    : await ctx.runQuery(api.workoutSessions.listRecent, { limit });
+
+  if (type && limited.length === 0) {
+    const recentSessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: Math.max(limit * 4, 50) });
+    limited = recentSessions
+      .filter((s: any) => s.type.toLowerCase() === type.toLowerCase())
+      .slice(0, limit);
   }
-  const limited = filtered.slice(0, limit);
 
   return JSON.stringify(
     limited.map((s: any) => ({
@@ -770,14 +877,16 @@ async function handleGetHistory(ctx: any, args: any): Promise<string> {
 }
 
 async function handleGetStats(ctx: any, args: any): Promise<string> {
-  // Fetch recent sessions instead of all sessions for faster response
-  const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: 50 });
-  const searchName = args.exerciseName.toLowerCase();
+  // Current implementation intentionally uses a bounded recent-session window for latency.
+  const recentSessionLimit = 50;
+  const sessions = await ctx.runQuery(api.workoutSessions.listRecent, { limit: recentSessionLimit });
+  const exerciseName = normalizeRequiredLabel(args.exerciseName, "exerciseName");
+  const searchName = exerciseName.toLowerCase();
 
   const matches: any[] = [];
   for (const session of sessions) {
     for (const exercise of session.exercises) {
-      if (exercise.name.toLowerCase().includes(searchName)) {
+      if (exercise.name.toLowerCase().includes(searchName) && exercise.sets.length > 0) {
         const maxWeight = Math.max(
           ...exercise.sets.map((s: any) => s.weight)
         );
@@ -812,26 +921,28 @@ async function handleGetStats(ctx: any, args: any): Promise<string> {
   if (matches.length === 0) {
     return JSON.stringify({
       found: false,
-      message: `No records found for "${args.exerciseName}"`,
+      message: `No records found for "${exerciseName}" in the last ${recentSessionLimit} sessions`,
     });
   }
 
-  const allTimeMax = Math.max(...matches.map((m) => m.maxWeight));
-  const allTimeEst1RM = Math.max(...matches.map((m) => m.est1RM));
+  const recentMax = Math.max(...matches.map((m) => m.maxWeight));
+  const recentEst1RM = Math.max(...matches.map((m) => m.est1RM));
 
   return JSON.stringify({
     found: true,
-    exerciseName: args.exerciseName,
+    exerciseName,
     sessions: matches,
-    allTimeMax,
-    allTimeEst1RM,
-    totalSessions: matches.length,
+    recentMax,
+    recentEst1RM,
+    sessionWindow: recentSessionLimit,
+    totalMatchedSessions: matches.length,
   });
 }
 
 async function handleCreateType(ctx: any, args: any): Promise<string> {
-  await ctx.runMutation(api.workoutTypes.create, { name: args.name });
-  return JSON.stringify({ success: true, name: args.name });
+  const name = normalizeRequiredLabel(args.name, "name");
+  await ctx.runMutation(api.workoutTypes.create, { name });
+  return JSON.stringify({ success: true, name });
 }
 
 async function handleDeleteWorkout(ctx: any, args: any): Promise<string> {
@@ -953,17 +1064,21 @@ async function handleStartSet(ctx: any, args: any, workoutSessionId?: string): P
   }
 
   try {
+    const exerciseName = normalizeRequiredLabel(args.exerciseName, "exerciseName");
+    const weight = args.weight === undefined
+      ? undefined
+      : validateWeight(args.weight);
     const result = await ctx.runMutation(api.exercises.startSet, {
       sessionId: sessionId as Id<"workoutSessions">,
-      exerciseName: args.exerciseName,
-      weight: args.weight,
+      exerciseName,
+      weight,
     });
     return JSON.stringify({
       success: true,
-      exerciseName: args.exerciseName,
-      weight: args.weight ?? null,
+      exerciseName,
+      weight: weight ?? null,
       startedAt: result.startedAt,
-      message: `Timer started for ${args.exerciseName}${args.weight ? ` at ${args.weight} lbs` : ""}`,
+      message: `Timer started for ${exerciseName}${weight ? ` at ${weight} lbs` : ""}`,
     });
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
@@ -978,18 +1093,22 @@ async function handleCompleteSet(ctx: any, args: any, workoutSessionId?: string)
   }
 
   try {
+    const validatedSet = validateWorkoutSet({ weight: args.weight, reps: args.reps });
+    const exerciseName = args.exerciseName
+      ? normalizeRequiredLabel(args.exerciseName, "exerciseName")
+      : undefined;
     const result = await ctx.runMutation(api.exercises.completeSet, {
       sessionId: sessionId as Id<"workoutSessions">,
-      ...(args.exerciseName ? { exerciseName: args.exerciseName } : {}),
-      weight: args.weight,
-      reps: args.reps,
+      ...(exerciseName ? { exerciseName } : {}),
+      weight: validatedSet.weight,
+      reps: validatedSet.reps,
     });
     return JSON.stringify({
       success: true,
       exerciseName: result.exerciseName,
-      weight: args.weight,
-      reps: args.reps,
-      message: `Completed: ${result.exerciseName} — ${args.weight} lbs × ${args.reps} reps. Rest timer started.`,
+      weight: validatedSet.weight,
+      reps: validatedSet.reps,
+      message: `Completed: ${result.exerciseName} — ${validatedSet.weight} lbs × ${validatedSet.reps} reps. Rest timer started.`,
     });
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
@@ -1001,10 +1120,7 @@ async function handleSetWorkoutType(ctx: any, args: any, workoutSessionId?: stri
   if (!workoutSessionId) {
     return JSON.stringify({ error: "No active workout session" });
   }
-  const { type } = args;
-  if (!type) {
-    return JSON.stringify({ error: "type is required" });
-  }
+  const type = normalizeRequiredLabel(args.type, "type");
   await ctx.runMutation(api.workoutSessions.updateType, {
     sessionId: workoutSessionId as any,
     type,

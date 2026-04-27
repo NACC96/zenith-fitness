@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CHAT_MODEL_OPTIONS } from "@convex/lib/httpSecurity";
 import ChatMarkdown from "@/components/ChatMarkdown";
 
 interface ChatMessage {
@@ -37,18 +38,7 @@ interface ChatDrawerProps {
   isStreaming: boolean;
 }
 
-const MODELS = [
-  { label: "Gemini 3.1 Pro", value: "google/gemini-3.1-pro-preview" },
-  { label: "Gemini 3.1 Pro CT", value: "google/gemini-3.1-pro-preview-customtools" },
-  { label: "Claude Sonnet 4.6", value: "anthropic/claude-sonnet-4.6" },
-  { label: "MiniMax M2.5", value: "minimax/minimax-m2.5" },
-  { label: "GLM-5", value: "z-ai/glm-5" },
-  { label: "GLM-5 Turbo", value: "z-ai/glm-5-turbo" },
-  { label: "Grok 4.20", value: "x-ai/grok-4.20-beta" },
-  { label: "Grok 4.20 MA", value: "x-ai/grok-4.20-multi-agent-beta" },
-  { label: "Kimi K2.5", value: "moonshotai/kimi-k2.5" },
-  { label: "DeepSeek V3.2", value: "deepseek/deepseek-v3.2" },
-];
+const MODELS = CHAT_MODEL_OPTIONS;
 
 const NON_VISION_MODELS = [
   "minimax/minimax-m2.5",
@@ -124,6 +114,9 @@ export default function ChatDrawer({
     previousMessageCountRef.current = messages.length;
     previousStreamingLengthRef.current = streamingContent.length;
     scrollToBottom("auto");
+    // Intentionally snapshot lengths only when the drawer opens or the active
+    // session changes; the new-message and streaming effects below handle deltas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId, isOpen, scrollToBottom]);
 
   useEffect(() => {
@@ -630,6 +623,7 @@ export default function ChatDrawer({
                   {msg.role === "user" && msg.images && msg.images.length > 0 && (
                     <div className="flex flex-wrap gap-1.5" style={{ marginBottom: msg.content ? "8px" : 0 }}>
                       {msg.images.map((img, idx) => (
+                        // eslint-disable-next-line @next/next/no-img-element -- Data URL chat thumbnails are already client-side previews, not optimizable remote assets.
                         <img
                           key={idx}
                           src={img}
@@ -749,6 +743,7 @@ export default function ChatDrawer({
                       background: "rgba(255,255,255,0.04)",
                     }}
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- Data URL attachment previews are already local client-side thumbnails. */}
                     <img
                       src={img}
                       alt={`Attached ${idx + 1}`}

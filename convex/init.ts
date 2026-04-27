@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { normalizeRequiredLabel } from "./lib/workoutValidation";
 
 const init = internalMutation(async (ctx) => {
   const existing = await ctx.db.query("workoutTypes").first();
@@ -10,15 +11,18 @@ const init = internalMutation(async (ctx) => {
   // Seed workout types
   const types = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Full Body"];
   for (const name of types) {
-    await ctx.db.insert("workoutTypes", { name });
+    await ctx.db.insert("workoutTypes", { name: normalizeRequiredLabel(name, "type") });
   }
 
+  const insertWorkoutSession = (type: string, date: string, label: string) =>
+    ctx.db.insert("workoutSessions", {
+      type: normalizeRequiredLabel(type, "type"),
+      date,
+      label,
+    });
+
   // Workout 1 — Chest, Jan 25, 2026
-  const session1 = await ctx.db.insert("workoutSessions", {
-    type: "Chest",
-    date: "2026-01-25",
-    label: "Sun, Jan 25",
-  });
+  const session1 = await insertWorkoutSession("Chest", "2026-01-25", "Sun, Jan 25");
   await ctx.db.insert("exercises", {
     sessionId: session1,
     name: "Bench Press",
@@ -62,11 +66,7 @@ const init = internalMutation(async (ctx) => {
   });
 
   // Workout 2 — Chest, Feb 8, 2026
-  const session2 = await ctx.db.insert("workoutSessions", {
-    type: "Chest",
-    date: "2026-02-08",
-    label: "Sun, Feb 8",
-  });
+  const session2 = await insertWorkoutSession("Chest", "2026-02-08", "Sun, Feb 8");
   await ctx.db.insert("exercises", {
     sessionId: session2,
     name: "Bench Press",
@@ -109,18 +109,14 @@ const init = internalMutation(async (ctx) => {
   });
 
   // Workout 3 — Chest, Feb 15, 2026
-  const session3 = await ctx.db.insert("workoutSessions", {
-    type: "Chest",
-    date: "2026-02-15",
-    label: "Sun, Feb 15",
-  });
+  const session3 = await insertWorkoutSession("Chest", "2026-02-15", "Sun, Feb 15");
   await ctx.db.insert("exercises", {
     sessionId: session3,
     name: "Bench Press",
     sets: [
       { weight: 85, reps: 12 },
       { weight: 95, reps: 12 },
-      { weight: 105, reps: 11.5 },
+      { weight: 105, reps: 11 },
       { weight: 115, reps: 6 },
     ],
   });
@@ -156,11 +152,7 @@ const init = internalMutation(async (ctx) => {
   });
 
   // Workout 4 — Back, Jan 27, 2026
-  const session4 = await ctx.db.insert("workoutSessions", {
-    type: "Back",
-    date: "2026-01-27",
-    label: "Tue, Jan 27",
-  });
+  const session4 = await insertWorkoutSession("Back", "2026-01-27", "Tue, Jan 27");
   await ctx.db.insert("exercises", {
     sessionId: session4,
     name: "Lat Pulldown",
@@ -191,11 +183,7 @@ const init = internalMutation(async (ctx) => {
   });
 
   // Workout 5 — Legs, Jan 29, 2026
-  const session5 = await ctx.db.insert("workoutSessions", {
-    type: "Legs",
-    date: "2026-01-29",
-    label: "Thu, Jan 29",
-  });
+  const session5 = await insertWorkoutSession("Legs", "2026-01-29", "Thu, Jan 29");
   await ctx.db.insert("exercises", {
     sessionId: session5,
     name: "Squat",

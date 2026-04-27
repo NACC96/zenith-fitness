@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { normalizeRequiredLabel } from "./lib/workoutValidation";
 
 export const list = query({
   args: {},
@@ -11,12 +12,13 @@ export const list = query({
 export const create = mutation({
   args: { name: v.string() },
   handler: async (ctx, args) => {
+    const name = normalizeRequiredLabel(args.name, "name");
     // Check for duplicates
     const existing = await ctx.db
       .query("workoutTypes")
-      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .withIndex("by_name", (q) => q.eq("name", name))
       .first();
     if (existing) return existing._id;
-    return await ctx.db.insert("workoutTypes", { name: args.name });
+    return await ctx.db.insert("workoutTypes", { name });
   },
 });
